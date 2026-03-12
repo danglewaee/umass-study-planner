@@ -1,0 +1,110 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BalanceOS MVP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">BalanceOS MVP</p>
+          <h1>Realistic planning for students who want consistency without burnout.</h1>
+        </div>
+        <div class="api-config">
+          <label for="apiBase">API Base URL</label>
+          <input id="apiBase" value="http://127.0.0.1:8000" />
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel">
+          <h2>Brain Dump</h2>
+          <p>Paste messy tasks. The backend will turn them into structured work items.</p>
+          <textarea id="brainDump" rows="8" placeholder="Example:
+- Finish ML homework
+- Follow up with recruiter
+- Gym on Thursday
+- Draft systems project milestone"></textarea>
+          <div class="actions">
+            <button id="parseDump">Parse Tasks</button>
+            <button id="loadSeed" class="secondary">Load Seed Plan</button>
+          </div>
+          <div id="parsedTasks" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Create Weekly Plan</h2>
+          <div class="form-grid">
+            <label>
+              Week Start
+              <input id="weekStart" type="date" />
+            </label>
+            <label>
+              Focus Start
+              <input id="focusStart" type="time" value="09:00" />
+            </label>
+            <label>
+              Focus End
+              <input id="focusEnd" type="time" value="18:00" />
+            </label>
+            <label>
+              Sleep Start
+              <input id="sleepStart" type="time" value="23:00" />
+            </label>
+            <label>
+              Sleep End
+              <input id="sleepEnd" type="time" value="07:00" />
+            </label>
+            <label>
+              Preferred Block (minutes)
+              <input id="blockMinutes" type="number" value="90" min="30" max="180" />
+            </label>
+          </div>
+          <div class="actions">
+            <button id="generatePlan">Generate Plan</button>
+          </div>
+          <div id="scoreSummary" class="score-grid"></div>
+          <div id="alerts" class="list"></div>
+        </section>
+
+        <section class="panel wide">
+          <h2>Weekly Plan</h2>
+          <div id="weekPlan" class="schedule"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Check-In</h2>
+          <div class="form-grid compact">
+            <label>
+              Energy
+              <input id="energy" type="number" value="3" min="1" max="5" />
+            </label>
+            <label>
+              Stress
+              <input id="stress" type="number" value="3" min="1" max="5" />
+            </label>
+            <label>
+              Confidence
+              <input id="confidence" type="number" value="3" min="1" max="5" />
+            </label>
+          </div>
+          <textarea id="checkinNote" rows="4" placeholder="How are you feeling this week?"></textarea>
+          <div class="actions">
+            <button id="submitCheckin">Update Insights</button>
+          </div>
+          <div id="insights" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Current Tasks</h2>
+          <div id="taskList" class="list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,589 @@
+﻿BALANCEOS SPEC
+
+1. PRODUCT OVERVIEW
+
+Name
+BalanceOS
+
+One-line Pitch
+An intelligent time-management system that turns a student's tasks, deadlines, class schedule, and energy constraints into realistic weekly plans optimized for balance, consistency, and progress.
+
+Core Thesis
+Most productivity tools optimize for output volume. BalanceOS optimizes for sustainable performance: helping students make steady progress without sacrificing sleep, recovery, or mental bandwidth.
+
+Target User
+- College students managing classes, assignments, exams, projects, and recruiting
+- Students who overcommit, procrastinate, or burn out from unrealistic planning
+- Users who want structure, not just reminders
+
+Core User Problem
+Students often know what they need to do, but fail to plan realistically. Their tasks are fragmented across calendars, notes, LMS platforms, spreadsheets, and memory. Existing tools do not balance deadlines with recovery, energy levels, and consistency.
+
+User Inputs
+- Tasks and deadlines
+- Class schedule and fixed commitments
+- Estimated workload or difficulty
+- Preferred sleep schedule
+- Preferred focus windows
+- Wellness commitments: meals, workouts, breaks, social recovery
+- Optional check-ins on stress, energy, and confidence
+
+System Outputs
+- Weekly plan
+- Daily focus blocks
+- Task breakdown into realistic substeps
+- Overload and burnout-risk warnings
+- Replanning when a task slips
+- Suggestions that improve consistency while protecting health
+
+2. OPTIMIZATION FRAMEWORK
+
+Top-Level Priority Order
+1. Balance and sustainability
+2. Consistency
+3. Goal attainment speed
+
+Why This Order
+A plan that overloads the user is fragile. Fragile plans fail, and then goal attainment drops anyway. The system should first protect viability, then promote repeatable behavior, then maximize progress.
+
+Optimization Objective
+The planner should maximize a multi-objective utility score:
+
+Overall Utility = Goal Progress + Consistency - Overload - Health Risk - Schedule Fragility
+
+Operationalized Scoring Function
+Score(plan) =
+  w1 * deadline_completion
+  + w2 * consistency_score
+  + w3 * goal_alignment
+  - w4 * overload_penalty
+  - w5 * sleep_violation_penalty
+  - w6 * burnout_risk_penalty
+  - w7 * reschedule_fragility
+
+Term Definitions
+- deadline_completion: likelihood that scheduled work will finish before deadlines
+- consistency_score: how evenly work is distributed across the week
+- goal_alignment: how well the plan prioritizes long-term goals, not just urgent tasks
+- overload_penalty: penalty for too many high-effort blocks in one day or too little buffer time
+- sleep_violation_penalty: penalty when the plan crowds out sleep target or recovery blocks
+- burnout_risk_penalty: penalty for repeated overload patterns over time
+- reschedule_fragility: penalty for plans that collapse if one block slips
+
+Policy vs Personalization
+- Research-based defaults define safe starting rules
+- User history personalizes the weights and scheduling strategy over time
+
+3. INTELLIGENCE SOURCES
+
+A. Research-Based Defaults
+Purpose
+Use evidence-informed heuristics as a safe baseline, not as rigid truth.
+
+Examples
+- Minimum sleep target
+- Maximum number of heavy cognitive blocks per day
+- Recommended break spacing
+- Reduced effectiveness after long uninterrupted study sessions
+- Spacing heavy tasks across the week instead of clustering
+
+Role in System
+- Defines initial constraints and penalties
+- Provides fallback behavior before enough personal data exists
+
+B. User History and Behavioral Modeling
+Purpose
+Learn what type of schedule this specific user actually follows.
+
+Signals
+- Completion rate by time of day
+- Rescheduling frequency
+- Time spent vs estimated effort
+- Task initiation delay
+- Preferred study windows
+- Stress check-ins
+- Patterns from chat/check-in notes
+
+What the system learns
+- Strong focus windows
+- When the user tends to procrastinate
+- Capacity per day and per week
+- Whether task breakdown helps
+- Whether the user overplans or underestimates effort
+
+C. Trend and Risk Detection
+Purpose
+Detect operational risk patterns early and help the user rebalance.
+
+Allowed Warning Types
+- Overload risk
+- Burnout risk
+- Deadline risk
+- Consistency drop
+- Sleep/recovery erosion
+
+Not Allowed
+- Mental health diagnosis
+- Medical claims
+- Psychological certainty statements
+
+Safe Example Warnings
+- You have rescheduled priority tasks for 4 days in a row.
+- Your current plan is cutting into your sleep target on 3 nights this week.
+- Completion rate is dropping relative to the last 2 weeks; consider reducing scope.
+- Wednesday has too many high-effort blocks and no recovery buffer.
+
+D. Coaching and Reminder Loop
+Purpose
+Help the user stay stable and consistent, not just informed.
+
+Loop
+- Plan
+- Execute
+- Check in
+- Replan
+- Reinforce
+
+System Behaviors
+- Daily reminders tuned to overload level
+- Small-scope suggestions if user is slipping
+- Positive reinforcement for streaks and realistic planning
+- Gradual improvement instead of aggressive optimization
+
+4. USER MODEL
+
+Key Dimensions
+- Deep focus endurance
+- Task initiation speed
+- Deadline reliability
+- Consistency streak
+- Recovery discipline
+- Tolerance for ambiguity
+- Best time-of-day for hard tasks
+- Overplanning tendency
+- Burnout susceptibility
+- Preferred task chunk size
+
+User Profile Example
+- Strong in early-morning deep work
+- Weak at starting ambiguous tasks
+- Often overcommits on Mondays
+- Responds well to smaller scoped tasks
+- Completion drops when sleep falls below target
+
+How It Is Used
+- Hard tasks placed in strongest focus windows
+- Ambiguous tasks auto-split into smaller blocks
+- Total daily effort capped if overload history is high
+- Recovery blocks preserved if burnout risk trend rises
+
+5. PRODUCT FEATURES
+
+Feature 1: Brain Dump Task Intake
+The user pastes or types freeform tasks. The system parses them into structured work items.
+
+Outputs
+- title
+- deadline
+- estimated effort
+- priority
+- difficulty
+- dependencies
+- category: class, recruiting, personal, health
+
+Feature 2: Smart Weekly Planner
+Generate a weekly schedule that respects:
+- classes and fixed commitments
+- sleep target
+- meals and breaks
+- exercise or recovery blocks
+- preferred focus windows
+- task urgency and difficulty
+
+Feature 3: Scope Calibration
+If a task is too large, the system suggests realistic substeps.
+
+Example
+Input: Finish systems project
+Output:
+- define milestones
+- implement ingestion layer
+- build anomaly evaluator
+- run benchmark
+- write README
+
+Feature 4: Consistency Engine
+Avoid all-or-nothing schedules. Spread meaningful work across the week.
+
+Feature 5: Adaptive Replanning
+If a task slips, regenerate the schedule while minimizing disruption.
+
+Feature 6: Risk Detection and Alerts
+Identify overload, reduced completion, or repeated task deferral.
+
+Feature 7: Goal Guidance
+Suggest tradeoffs when the user is overbooked.
+
+Example
+To protect your sleep target and still finish Project A, reduce Task B scope or move one recruiting task to Friday.
+
+6. SYSTEM ARCHITECTURE
+
+Frontend
+- React + TypeScript
+- Calendar and timeline views
+- Daily plan, weekly plan, and warnings dashboard
+- Check-in UI for mood, energy, and workload confidence
+
+Backend
+- FastAPI
+- Planner orchestration API
+- User profile service
+- Scheduling engine service
+- Risk detection service
+- Task parsing and decomposition service
+
+Data Layer
+- PostgreSQL for user, schedule, task, and history data
+- Redis for caching and job queue coordination
+
+Background Jobs
+- Schedule generation
+- Replanning after missed tasks
+- Reminder generation
+- Trend analysis
+- Daily and weekly digest jobs
+
+Observability
+- Prometheus metrics
+- Grafana dashboards
+- Structured logs for planner decisions and schedule generation
+
+Optional AI Layer
+- LLM for task parsing and decomposition
+- Retrieval of study/planning heuristics if external knowledge is later added
+
+Deployment
+- Docker Compose for MVP
+- Can evolve into cloud deployment later
+
+7. LOGICAL COMPONENTS
+
+A. Policy Engine
+Stores global rules and safe defaults.
+Examples
+- minimum sleep target
+- max heavy blocks per day
+- default break cadence
+- overload penalty curves
+
+B. User Modeling Engine
+Computes user profile features from history.
+Outputs
+- preferred work windows
+- risk sensitivity
+- realistic capacity estimates
+- task-style preferences
+
+C. Planning Engine
+Produces schedules using tasks, constraints, and learned user model.
+Possible implementation
+- heuristic planner first
+- OR-Tools or MILP-based planner in V2 if needed
+
+D. Risk Engine
+Monitors trend signals and outputs warnings with confidence levels.
+
+E. Coaching Engine
+Turns raw planner output and risk signals into user-facing suggestions and reminders.
+
+8. PLANNING ENGINE DESIGN
+
+Input Objects
+- tasks
+- time blocks already occupied
+- user policy constraints
+- user profile
+- deadlines and dependencies
+
+Hard Constraints
+- fixed class schedule
+- minimum sleep block
+- non-overlapping time blocks
+- must respect hard deadlines
+
+Soft Constraints
+- minimize heavy-task clustering
+- maximize alignment with strong focus windows
+- preserve breaks and recovery
+- reduce number of late-evening hard tasks
+- distribute work consistently across the week
+
+Planning Strategy
+MVP
+- weighted heuristic scheduler with constraint checks
+- slot scoring by urgency, difficulty, profile match, and fatigue cost
+
+V2
+- multi-objective optimizer with fallback heuristics
+- explicit tradeoff tuning by user preference
+
+Replanning Strategy
+- detect missed or delayed tasks
+- rerun planner with minimum-disruption penalty
+- preserve unchanged blocks when possible
+
+9. RISK DETECTION DESIGN
+
+Behavioral Signals
+- repeated rescheduling
+- declining completion rate
+- sleep target violations
+- too many overdue high-priority tasks
+- dense clusters of heavy work with no recovery
+- check-ins indicating stress or low energy
+
+Risk Scores
+- overload_risk_score
+- deadline_risk_score
+- consistency_risk_score
+- recovery_deficit_score
+
+Response Types
+- lighten plan
+- reduce scope
+- shift lower-priority work
+- inject recovery block
+- ask user for re-estimate of effort
+
+10. DATA MODEL
+
+User
+- id
+- name
+- timezone
+- sleep_target_hours
+- preferred_sleep_start
+- preferred_sleep_end
+- focus_window_preferences
+- weekly_goal_preferences
+
+Task
+- id
+- user_id
+- title
+- description
+- category
+- deadline
+- estimated_minutes
+- difficulty
+- priority
+- status
+- parent_task_id
+- source
+
+ScheduleBlock
+- id
+- user_id
+- task_id nullable
+- type: deep_work, admin, class, meal, exercise, rest, sleep, buffer
+- start_time
+- end_time
+- is_fixed
+- generated_by_system
+
+UserCheckIn
+- id
+- user_id
+- date
+- energy_level
+- stress_level
+- confidence_level
+- note_text
+
+TaskHistoryEvent
+- id
+- user_id
+- task_id
+- event_type: created, started, paused, completed, delayed, rescheduled
+- timestamp
+- metadata_json
+
+UserProfileSnapshot
+- id
+- user_id
+- created_at
+- deep_focus_score
+- consistency_score
+- overload_sensitivity
+- procrastination_tendency
+- preferred_chunk_minutes
+- best_work_windows_json
+
+RiskAlert
+- id
+- user_id
+- type
+- severity
+- explanation
+- created_at
+- resolved_at
+
+11. API SURFACE
+
+POST /tasks/brain-dump
+- input: freeform text
+- output: parsed structured tasks
+
+POST /planner/generate-week
+- input: tasks, constraints, schedule context
+- output: generated weekly plan and explanation
+
+POST /planner/replan
+- input: missed task or changed availability
+- output: revised schedule with change summary
+
+GET /planner/week
+- returns current weekly schedule
+
+POST /checkins
+- input: energy, stress, confidence, notes
+- output: updated risk assessment
+
+GET /alerts
+- returns active warnings and suggestions
+
+GET /profile/insights
+- returns learned user strengths, risks, and scheduling preferences
+
+12. MVP / V1 / V2
+
+MVP
+- Manual task entry
+- Class schedule input
+- Weekly planner generation
+- Sleep and break constraints
+- Basic risk warnings
+- Simple user profile from completion history
+- Replanning for missed tasks
+
+V1
+- Freeform task parsing
+- Task decomposition
+- Daily check-ins
+- Better personalization by time-of-day and consistency trend
+- Dashboard for progress, overload, and weekly plan quality
+
+V2
+- Advanced optimization engine
+- Better explainability and tradeoff suggestions
+- Smarter coaching loop
+- Optional integrations: Google Calendar, LMS import, recruiting tracker
+- Team or accountability mode later if desired
+
+13. SUCCESS METRICS
+
+System Metrics
+- planner generation latency p50 and p95
+- replanning latency p50 and p95
+- cache hit rate
+- reminder generation latency
+
+Planner Quality Metrics
+- percentage of tasks scheduled before deadline
+- overloaded-day reduction versus greedy baseline
+- consistency score versus naive planner
+- percentage of schedules preserving sleep target
+- percentage of schedules preserving break constraints
+
+User Outcome Metrics
+- missed deadline reduction
+- reduction in rescheduled high-priority tasks
+- increase in evenly distributed workload across the week
+- improvement in completion rate after replanning
+
+AI/Parsing Metrics
+- task parsing accuracy
+- task decomposition usefulness rating
+- suggestion acceptance rate
+
+14. BENCHMARK PLAN
+
+Synthetic Workloads
+- light semester week
+- exam-heavy week
+- project crunch week
+- recruiting overlap week
+- overload recovery week
+
+Baselines
+- first-available-slot planner
+- urgency-only greedy planner
+- manual fixed-load schedule
+
+Compare On
+- task completion before deadline
+- sleep violations
+- overloaded-day count
+- consistency score
+- number of replans needed
+- fragility under simulated missed tasks
+
+15. DIFFERENTIATION
+
+What makes BalanceOS non-generic
+- Optimizes for sustainable performance, not raw output
+- Personalizes from behavioral history, not just static preferences
+- Uses consistency as a first-class optimization target
+- Treats health constraints as planner inputs, not motivational afterthoughts
+- Replans adaptively when reality changes
+
+16. RISKS AND BOUNDARIES
+
+Product Risks
+- becoming a generic to-do app
+- becoming an ungrounded wellness app
+- overpromising AI capability before enough data exists
+
+Design Boundaries
+- do not diagnose medical or mental conditions
+- do not claim clinical support
+- frame warnings as workload and behavior signals
+- always provide actionable planning suggestions, not vague advice
+
+17. RESUME-READY PROJECT DESCRIPTION
+
+BalanceOS | React, TypeScript, FastAPI, PostgreSQL, Redis, Docker, Prometheus
+- Built an intelligent time-management system that converts student tasks, deadlines, and class schedules into realistic weekly plans optimized for balance, consistency, and progress.
+- Designed a multi-objective scheduling engine combining deadline urgency, effort estimation, sleep constraints, and recovery blocks to reduce overloaded study days versus a greedy baseline.
+- Implemented adaptive replanning, risk detection, and personalized scheduling using behavioral history, enabling the system to preserve consistency while protecting user well-being.
+
+18. SHORT PORTFOLIO BLURB
+
+BalanceOS is a planning system for students who want structure without burnout. Instead of maximizing raw productivity, it generates realistic weekly schedules that balance deadlines, energy, sleep, recovery, and long-term goals. The system continuously learns from user behavior, replans when tasks slip, and nudges users toward sustainable consistency.
+
+19. BUILD ORDER
+
+Week 1
+- task model
+- schedule block model
+- weekly planner heuristic
+- basic React planner UI
+
+Week 2
+- replanning flow
+- check-ins
+- user profile features
+- overload and consistency alerts
+
+Week 3
+- task decomposition
+- risk engine refinement
+- analytics and planner quality dashboard
+- benchmark harness against baselines
+
+Week 4
+- polish UI
+- observability
+- explanation layer
+- demo dataset and video walkthrough
