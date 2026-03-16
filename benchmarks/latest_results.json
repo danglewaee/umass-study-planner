@@ -1,0 +1,182 @@
+{
+  "planner": {
+    "missed_deadlines": 0.52,
+    "overload_slots": 1.16,
+    "off_window_penalty": 7.22,
+    "solve_time_ms": 455.66,
+    "objective_value": 1097.5
+  },
+  "baselines": {
+    "edf": {
+      "missed_deadlines": 1.4,
+      "overload_slots": 0,
+      "off_window_penalty": 38.16,
+      "solve_time_ms": 0.0,
+      "objective_value": 2451.6
+    },
+    "weighted": {
+      "missed_deadlines": 0.02,
+      "overload_slots": 12.44,
+      "off_window_penalty": 38.36,
+      "solve_time_ms": 0.0,
+      "objective_value": 3839.8
+    }
+  },
+  "replan": {
+    "planner": {
+      "missed_deadlines": 0.56,
+      "overload_slots": 1.52,
+      "schedule_churn": 1.12,
+      "preserved_blocks": 13.04,
+      "schedule_stability_pct": 91.97,
+      "solve_time_ms": 277.12,
+      "objective_value": 1328.2
+    },
+    "baselines": {
+      "edf": {
+        "missed_deadlines": 1.5,
+        "overload_slots": 0,
+        "schedule_churn": 2.46,
+        "preserved_blocks": 10.82,
+        "schedule_stability_pct": 81.7,
+        "solve_time_ms": 0.0,
+        "objective_value": 2574.4
+      },
+      "weighted": {
+        "missed_deadlines": 0.02,
+        "overload_slots": 12.82,
+        "schedule_churn": 1.44,
+        "preserved_blocks": 13.22,
+        "schedule_stability_pct": 90.41,
+        "solve_time_ms": 0.0,
+        "objective_value": 3933.7
+      }
+    }
+  },
+  "replan_by_disruption": {
+    "urgent_commitment": {
+      "planner": {
+        "missed_deadlines": 0.62,
+        "overload_slots": 1.54,
+        "schedule_churn": 1.31,
+        "preserved_blocks": 12.46,
+        "schedule_stability_pct": 90.49,
+        "solve_time_ms": 323.72,
+        "objective_value": 1405.0
+      },
+      "baselines": {
+        "edf": {
+          "missed_deadlines": 1.38,
+          "overload_slots": 0,
+          "schedule_churn": 4,
+          "preserved_blocks": 9.15,
+          "schedule_stability_pct": 69.72,
+          "solve_time_ms": 0.0,
+          "objective_value": 2433.08
+        },
+        "weighted": {
+          "missed_deadlines": 0.08,
+          "overload_slots": 11,
+          "schedule_churn": 1.31,
+          "preserved_blocks": 12.92,
+          "schedule_stability_pct": 90.87,
+          "solve_time_ms": 0.0,
+          "objective_value": 3603.85
+        }
+      }
+    },
+    "missed_session": {
+      "planner": {
+        "missed_deadlines": 0.54,
+        "overload_slots": 1.08,
+        "schedule_churn": 0.85,
+        "preserved_blocks": 13.38,
+        "schedule_stability_pct": 94.0,
+        "solve_time_ms": 236.31,
+        "objective_value": 1251.15
+      },
+      "baselines": {
+        "edf": {
+          "missed_deadlines": 1.77,
+          "overload_slots": 0,
+          "schedule_churn": 0.15,
+          "preserved_blocks": 12.85,
+          "schedule_stability_pct": 98.9,
+          "solve_time_ms": 0.0,
+          "objective_value": 2845.0
+        },
+        "weighted": {
+          "missed_deadlines": 0,
+          "overload_slots": 13.15,
+          "schedule_churn": 0.31,
+          "preserved_blocks": 14.46,
+          "schedule_stability_pct": 97.94,
+          "solve_time_ms": 0.0,
+          "objective_value": 3997.69
+        }
+      }
+    },
+    "deadline_pull_in": {
+      "planner": {
+        "missed_deadlines": 0.42,
+        "overload_slots": 1.17,
+        "schedule_churn": 0.42,
+        "preserved_blocks": 14.08,
+        "schedule_stability_pct": 97.06,
+        "solve_time_ms": 248.93,
+        "objective_value": 1014.58
+      },
+      "baselines": {
+        "edf": {
+          "missed_deadlines": 1.17,
+          "overload_slots": 0,
+          "schedule_churn": 1.75,
+          "preserved_blocks": 12,
+          "schedule_stability_pct": 87.19,
+          "solve_time_ms": 0.0,
+          "objective_value": 2239.58
+        },
+        "weighted": {
+          "missed_deadlines": 0,
+          "overload_slots": 11.25,
+          "schedule_churn": 2.75,
+          "preserved_blocks": 12.17,
+          "schedule_stability_pct": 81.95,
+          "solve_time_ms": 0.0,
+          "objective_value": 3570.42
+        }
+      }
+    },
+    "low_energy_day": {
+      "planner": {
+        "missed_deadlines": 0.67,
+        "overload_slots": 2.33,
+        "schedule_churn": 1.92,
+        "preserved_blocks": 12.25,
+        "schedule_stability_pct": 86.26,
+        "solve_time_ms": 299.04,
+        "objective_value": 1642.08
+      },
+      "baselines": {
+        "edf": {
+          "missed_deadlines": 1.67,
+          "overload_slots": 0,
+          "schedule_churn": 4,
+          "preserved_blocks": 9.25,
+          "schedule_stability_pct": 70.55,
+          "solve_time_ms": 0.0,
+          "objective_value": 2769.17
+        },
+        "weighted": {
+          "missed_deadlines": 0,
+          "overload_slots": 16,
+          "schedule_churn": 1.5,
+          "preserved_blocks": 13.25,
+          "schedule_stability_pct": 90.24,
+          "solve_time_ms": 0.0,
+          "objective_value": 4585.0
+        }
+      }
+    }
+  }
+}

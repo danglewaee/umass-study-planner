@@ -1,0 +1,419 @@
+{
+  "trained_agent": {
+    "episodes": 60,
+    "unique_states": 17,
+    "average_reward": 94.21,
+    "final_epsilon": 0.05,
+    "action_counts": {
+      "deadline_rescue": 31,
+      "stability_aware": 20,
+      "full_replan": 1,
+      "focus_windows": 3,
+      "load_balance": 5
+    }
+  },
+  "learned_policy": {
+    "reward": 95.63,
+    "missed_deadlines": 0.04,
+    "overload_slots": 4.72,
+    "schedule_churn": 1.9,
+    "preserved_blocks": 12.06,
+    "schedule_stability_pct": 86.84,
+    "off_window_penalty": 12.16,
+    "solve_time_ms": 197.74
+  },
+  "action_distribution": {
+    "stability_aware": 15,
+    "load_balance": 6,
+    "deadline_rescue": 29
+  },
+  "fixed_policies": {
+    "stability_aware": {
+      "reward": 81.47,
+      "missed_deadlines": 0.52,
+      "overload_slots": 1.72,
+      "schedule_churn": 0.88,
+      "preserved_blocks": 13.08,
+      "schedule_stability_pct": 93.7,
+      "off_window_penalty": 9.52,
+      "solve_time_ms": 199.44
+    },
+    "deadline_rescue": {
+      "reward": 95.48,
+      "missed_deadlines": 0.0,
+      "overload_slots": 4.96,
+      "schedule_churn": 2.06,
+      "preserved_blocks": 11.9,
+      "schedule_stability_pct": 85.7,
+      "off_window_penalty": 12.38,
+      "solve_time_ms": 196.18
+    },
+    "load_balance": {
+      "reward": -8.87,
+      "missed_deadlines": 0.74,
+      "overload_slots": 0.68,
+      "schedule_churn": 1.96,
+      "preserved_blocks": 12.0,
+      "schedule_stability_pct": 86.02,
+      "off_window_penalty": 9.38,
+      "solve_time_ms": 674.89
+    },
+    "full_replan": {
+      "reward": -11.99,
+      "missed_deadlines": 0.0,
+      "overload_slots": 4.82,
+      "schedule_churn": 7.0,
+      "preserved_blocks": 6.96,
+      "schedule_stability_pct": 50.25,
+      "off_window_penalty": 11.66,
+      "solve_time_ms": 202.51
+    }
+  },
+  "heuristics": {
+    "edf": {
+      "reward": -466.45,
+      "missed_deadlines": 1.6,
+      "overload_slots": 0.0,
+      "schedule_churn": 13.62,
+      "preserved_blocks": 0.34,
+      "schedule_stability_pct": 2.35,
+      "off_window_penalty": 37.88,
+      "solve_time_ms": 0.0
+    },
+    "weighted": {
+      "reward": -339.91,
+      "missed_deadlines": 0.0,
+      "overload_slots": 10.68,
+      "schedule_churn": 13.02,
+      "preserved_blocks": 0.94,
+      "schedule_stability_pct": 6.75,
+      "off_window_penalty": 40.6,
+      "solve_time_ms": 0.0
+    }
+  },
+  "by_disruption": {
+    "urgent_commitment": {
+      "learned_policy": {
+        "reward": 102.07,
+        "missed_deadlines": 0.08,
+        "overload_slots": 4.77,
+        "schedule_churn": 1.08,
+        "preserved_blocks": 12.31,
+        "schedule_stability_pct": 91.68,
+        "off_window_penalty": 12.38,
+        "solve_time_ms": 200.34
+      },
+      "action_distribution": {
+        "stability_aware": 5,
+        "deadline_rescue": 7,
+        "load_balance": 1
+      },
+      "fixed_policies": {
+        "stability_aware": {
+          "reward": 56.1,
+          "missed_deadlines": 0.62,
+          "overload_slots": 1.69,
+          "schedule_churn": 0.85,
+          "preserved_blocks": 12.54,
+          "schedule_stability_pct": 93.77,
+          "off_window_penalty": 9.62,
+          "solve_time_ms": 222.67
+        },
+        "deadline_rescue": {
+          "reward": 109.16,
+          "missed_deadlines": 0.0,
+          "overload_slots": 5.23,
+          "schedule_churn": 1.08,
+          "preserved_blocks": 12.31,
+          "schedule_stability_pct": 91.68,
+          "off_window_penalty": 12.54,
+          "solve_time_ms": 197.3
+        },
+        "load_balance": {
+          "reward": -9.79,
+          "missed_deadlines": 0.85,
+          "overload_slots": 0.23,
+          "schedule_churn": 2.15,
+          "preserved_blocks": 11.23,
+          "schedule_stability_pct": 83.92,
+          "off_window_penalty": 9.92,
+          "solve_time_ms": 427.87
+        },
+        "full_replan": {
+          "reward": -9.25,
+          "missed_deadlines": 0.0,
+          "overload_slots": 4.77,
+          "schedule_churn": 6.92,
+          "preserved_blocks": 6.46,
+          "schedule_stability_pct": 48.4,
+          "off_window_penalty": 11.69,
+          "solve_time_ms": 187.83
+        }
+      },
+      "heuristics": {
+        "edf": {
+          "reward": -458.37,
+          "missed_deadlines": 1.62,
+          "overload_slots": 0.0,
+          "schedule_churn": 13.08,
+          "preserved_blocks": 0.31,
+          "schedule_stability_pct": 2.09,
+          "off_window_penalty": 36.23,
+          "solve_time_ms": 0.0
+        },
+        "weighted": {
+          "reward": -339.43,
+          "missed_deadlines": 0.0,
+          "overload_slots": 11.0,
+          "schedule_churn": 12.62,
+          "preserved_blocks": 0.77,
+          "schedule_stability_pct": 5.85,
+          "off_window_penalty": 38.77,
+          "solve_time_ms": 0.0
+        }
+      }
+    },
+    "missed_session": {
+      "learned_policy": {
+        "reward": 179.31,
+        "missed_deadlines": 0.0,
+        "overload_slots": 2.92,
+        "schedule_churn": 1.08,
+        "preserved_blocks": 13.0,
+        "schedule_stability_pct": 92.57,
+        "off_window_penalty": 10.62,
+        "solve_time_ms": 171.26
+      },
+      "action_distribution": {
+        "load_balance": 3,
+        "deadline_rescue": 5,
+        "stability_aware": 5
+      },
+      "fixed_policies": {
+        "stability_aware": {
+          "reward": 161.36,
+          "missed_deadlines": 0.31,
+          "overload_slots": 1.15,
+          "schedule_churn": 0.69,
+          "preserved_blocks": 13.38,
+          "schedule_stability_pct": 95.07,
+          "off_window_penalty": 8.15,
+          "solve_time_ms": 167.94
+        },
+        "deadline_rescue": {
+          "reward": 169.91,
+          "missed_deadlines": 0.0,
+          "overload_slots": 3.0,
+          "schedule_churn": 1.38,
+          "preserved_blocks": 12.69,
+          "schedule_stability_pct": 90.2,
+          "off_window_penalty": 10.85,
+          "solve_time_ms": 169.09
+        },
+        "load_balance": {
+          "reward": 79.96,
+          "missed_deadlines": 0.38,
+          "overload_slots": 0.85,
+          "schedule_churn": 1.15,
+          "preserved_blocks": 12.92,
+          "schedule_stability_pct": 91.68,
+          "off_window_penalty": 8.0,
+          "solve_time_ms": 914.61
+        },
+        "full_replan": {
+          "reward": 57.58,
+          "missed_deadlines": 0.0,
+          "overload_slots": 3.08,
+          "schedule_churn": 6.23,
+          "preserved_blocks": 7.85,
+          "schedule_stability_pct": 55.58,
+          "off_window_penalty": 9.54,
+          "solve_time_ms": 199.16
+        }
+      },
+      "heuristics": {
+        "edf": {
+          "reward": -348.2,
+          "missed_deadlines": 1.15,
+          "overload_slots": 0.0,
+          "schedule_churn": 13.54,
+          "preserved_blocks": 0.54,
+          "schedule_stability_pct": 3.83,
+          "off_window_penalty": 38.0,
+          "solve_time_ms": 0.0
+        },
+        "weighted": {
+          "reward": -310.9,
+          "missed_deadlines": 0.0,
+          "overload_slots": 9.54,
+          "schedule_churn": 13.23,
+          "preserved_blocks": 0.85,
+          "schedule_stability_pct": 5.95,
+          "off_window_penalty": 39.69,
+          "solve_time_ms": 0.0
+        }
+      }
+    },
+    "deadline_pull_in": {
+      "learned_policy": {
+        "reward": 1.77,
+        "missed_deadlines": 0.0,
+        "overload_slots": 7.58,
+        "schedule_churn": 2.92,
+        "preserved_blocks": 12.0,
+        "schedule_stability_pct": 81.84,
+        "off_window_penalty": 12.92,
+        "solve_time_ms": 215.31
+      },
+      "action_distribution": {
+        "stability_aware": 2,
+        "deadline_rescue": 10
+      },
+      "fixed_policies": {
+        "stability_aware": {
+          "reward": -2.69,
+          "missed_deadlines": 0.83,
+          "overload_slots": 2.17,
+          "schedule_churn": 0.5,
+          "preserved_blocks": 14.42,
+          "schedule_stability_pct": 96.85,
+          "off_window_penalty": 9.0,
+          "solve_time_ms": 197.65
+        },
+        "deadline_rescue": {
+          "reward": -10.12,
+          "missed_deadlines": 0.0,
+          "overload_slots": 7.67,
+          "schedule_churn": 3.33,
+          "preserved_blocks": 11.58,
+          "schedule_stability_pct": 79.07,
+          "off_window_penalty": 12.92,
+          "solve_time_ms": 218.39
+        },
+        "load_balance": {
+          "reward": -154.09,
+          "missed_deadlines": 1.17,
+          "overload_slots": 0.83,
+          "schedule_churn": 2.25,
+          "preserved_blocks": 12.67,
+          "schedule_stability_pct": 85.5,
+          "off_window_penalty": 9.0,
+          "solve_time_ms": 987.5
+        },
+        "full_replan": {
+          "reward": -100.88,
+          "missed_deadlines": 0.0,
+          "overload_slots": 7.42,
+          "schedule_churn": 7.67,
+          "preserved_blocks": 7.25,
+          "schedule_stability_pct": 49.51,
+          "off_window_penalty": 12.92,
+          "solve_time_ms": 225.19
+        }
+      },
+      "heuristics": {
+        "edf": {
+          "reward": -637.3,
+          "missed_deadlines": 2.17,
+          "overload_slots": 0.0,
+          "schedule_churn": 14.75,
+          "preserved_blocks": 0.17,
+          "schedule_stability_pct": 1.2,
+          "off_window_penalty": 39.5,
+          "solve_time_ms": 0.0
+        },
+        "weighted": {
+          "reward": -414.11,
+          "missed_deadlines": 0.0,
+          "overload_slots": 12.67,
+          "schedule_churn": 13.83,
+          "preserved_blocks": 1.08,
+          "schedule_stability_pct": 7.01,
+          "off_window_penalty": 43.33,
+          "solve_time_ms": 0.0
+        }
+      }
+    },
+    "low_energy_day": {
+      "learned_policy": {
+        "reward": 91.86,
+        "missed_deadlines": 0.08,
+        "overload_slots": 3.75,
+        "schedule_churn": 2.67,
+        "preserved_blocks": 10.83,
+        "schedule_stability_pct": 80.4,
+        "off_window_penalty": 12.83,
+        "solve_time_ms": 206.02
+      },
+      "action_distribution": {
+        "deadline_rescue": 7,
+        "stability_aware": 3,
+        "load_balance": 2
+      },
+      "fixed_policies": {
+        "stability_aware": {
+          "reward": 106.57,
+          "missed_deadlines": 0.33,
+          "overload_slots": 1.92,
+          "schedule_churn": 1.5,
+          "preserved_blocks": 12.0,
+          "schedule_stability_pct": 88.98,
+          "off_window_penalty": 11.42,
+          "solve_time_ms": 210.18
+        },
+        "deadline_rescue": {
+          "reward": 105.65,
+          "missed_deadlines": 0.0,
+          "overload_slots": 4.08,
+          "schedule_churn": 2.58,
+          "preserved_blocks": 10.92,
+          "schedule_stability_pct": 81.0,
+          "off_window_penalty": 13.33,
+          "solve_time_ms": 202.1
+        },
+        "load_balance": {
+          "reward": 41.12,
+          "missed_deadlines": 0.58,
+          "overload_slots": 0.83,
+          "schedule_churn": 2.33,
+          "preserved_blocks": 11.17,
+          "schedule_stability_pct": 82.68,
+          "off_window_penalty": 10.67,
+          "solve_time_ms": 370.2
+        },
+        "full_replan": {
+          "reward": -1.43,
+          "missed_deadlines": 0.0,
+          "overload_slots": 4.17,
+          "schedule_churn": 7.25,
+          "preserved_blocks": 6.25,
+          "schedule_stability_pct": 47.21,
+          "off_window_penalty": 12.67,
+          "solve_time_ms": 199.37
+        }
+      },
+      "heuristics": {
+        "edf": {
+          "reward": -432.45,
+          "missed_deadlines": 1.5,
+          "overload_slots": 0.0,
+          "schedule_churn": 13.17,
+          "preserved_blocks": 0.33,
+          "schedule_stability_pct": 2.19,
+          "off_window_penalty": 37.92,
+          "solve_time_ms": 0.0
+        },
+        "weighted": {
+          "reward": -297.67,
+          "missed_deadlines": 0.0,
+          "overload_slots": 9.58,
+          "schedule_churn": 12.42,
+          "preserved_blocks": 1.08,
+          "schedule_stability_pct": 8.33,
+          "off_window_penalty": 40.83,
+          "solve_time_ms": 0.0
+        }
+      }
+    }
+  }
+}
