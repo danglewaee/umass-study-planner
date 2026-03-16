@@ -20,3 +20,6 @@ Scenario -> candidate generation -> bounded layout enumeration -> CP-SAT solve -
 - 30-minute slots
 - stability-aware replanning via layout preservation
 - weighted objective over deadlines, overload, cram, churn, fragmentation, and off-window penalties
+
+## Detailed pipeline
+See `docs/pipeline.md` for the full end-to-end planning, disruption, RL, evaluation, and API pipeline.

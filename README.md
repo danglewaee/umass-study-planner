@@ -31,3 +31,7 @@ Turn a student scheduling app into a measurable optimization/systems project.
 - `CP-SAT` remains the feasibility-preserving planner for initial schedules.
 - A simulation-trained tabular RL agent selects between replanning strategies such as `stability_aware` and `deadline_rescue` after disruptions.
 - Benchmarks live in `benchmarks/compare.py` and `benchmarks/compare_rl.py`.
+
+## Pipeline docs
+- high-level architecture: `docs/architecture.md`
+- full end-to-end pipeline: `docs/pipeline.md`
