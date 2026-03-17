@@ -21,6 +21,13 @@ class TaskStatus(str, Enum):
     delayed = "delayed"
 
 
+class PlanStrategy(str, Enum):
+    stability_aware = "stability_aware"
+    deadline_rescue = "deadline_rescue"
+    load_balance = "load_balance"
+    focus_windows = "focus_windows"
+
+
 class UserPreferences(BaseModel):
     sleep_start: time = time(hour=23, minute=0)
     sleep_end: time = time(hour=7, minute=0)
@@ -69,6 +76,18 @@ class ScheduleBlock(BaseModel):
 class WeeklyPlanRequest(BaseModel):
     week_start: date
     preferences: UserPreferences | None = None
+    strategy: PlanStrategy = PlanStrategy.stability_aware
+
+
+class PlanMetrics(BaseModel):
+    scheduled_tasks: int
+    unscheduled_tasks: int
+    preserved_blocks: int = 0
+    schedule_stability_pct: float = 100.0
+    overload_days: int = 0
+    off_window_blocks: int = 0
+    total_deep_work_minutes: int = 0
+    focus_alignment_pct: float = 100.0
 
 
 class WeeklyPlanResponse(BaseModel):
@@ -76,6 +95,8 @@ class WeeklyPlanResponse(BaseModel):
     blocks: list[ScheduleBlock]
     alerts: list[str]
     score_summary: dict[str, float]
+    strategy_used: PlanStrategy = PlanStrategy.stability_aware
+    metrics: PlanMetrics | None = None
 
 
 class CheckInInput(BaseModel):
@@ -101,6 +122,32 @@ class ReplanRequest(BaseModel):
     task_id: str
     week_start: date
     reason: str = Field(default="Task slipped")
+    strategy: PlanStrategy | None = None
+
+
+class RLTrainRequest(BaseModel):
+    episodes: int = Field(default=60, ge=20, le=300)
+    seed: int = Field(default=11, ge=0)
+
+
+class RLTrainResponse(BaseModel):
+    episodes: int
+    unique_states: int
+    average_reward: float
+    final_epsilon: float
+    action_counts: dict[str, int]
+
+
+class RLReplanResponse(BaseModel):
+    chosen_strategy: PlanStrategy
+    encoded_state: tuple[int, int, int, int]
+    result: WeeklyPlanResponse
+
+
+class RepairEvaluationRequest(BaseModel):
+    training_episodes: int = Field(default=60, ge=20, le=300)
+    evaluation_scenarios: int = Field(default=40, ge=10, le=200)
+    seed: int = Field(default=11, ge=0)
 
 
 class HealthResponse(BaseModel):
