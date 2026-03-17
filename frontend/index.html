@@ -1,106 +1,275 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BalanceOS MVP</title>
+    <title>UMass Study Partner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="page">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">BalanceOS MVP</p>
-          <h1>Realistic planning for students who want consistency without burnout.</h1>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark">U</div>
+          <div>
+            <strong>UMass Study Partner</strong>
+            <p>Adaptive weekly planning for real student constraints.</p>
+          </div>
         </div>
-        <div class="api-config">
+
+        <nav class="sidebar-nav">
+          <a href="#overview">Overview</a>
+          <a href="#planner">Planner</a>
+          <a href="#intake">Task Intake</a>
+          <a href="#repair">Repair Lab</a>
+          <a href="#insights-section">Insights</a>
+        </nav>
+
+        <section class="sidebar-card">
           <label for="apiBase">API Base URL</label>
           <input id="apiBase" value="http://127.0.0.1:8000" />
-        </div>
-      </header>
+          <div class="sidebar-actions">
+            <button id="loadSeed" class="secondary">Load Demo Plan</button>
+            <button id="generatePlanPrimary">Generate Week</button>
+          </div>
+        </section>
 
-      <main class="layout">
-        <section class="panel">
-          <h2>Brain Dump</h2>
-          <p>Paste messy tasks. The backend will turn them into structured work items.</p>
-          <textarea id="brainDump" rows="8" placeholder="Example:
-- Finish ML homework
-- Follow up with recruiter
+        <section class="sidebar-card">
+          <p class="sidebar-label">Current build highlights</p>
+          <ul class="capability-list">
+            <li>Strategy-aware weekly planning</li>
+            <li>Adaptive replanning when work slips</li>
+            <li>RL-based repair strategy selection</li>
+            <li>Plan quality metrics and recovery signals</li>
+          </ul>
+        </section>
+      </aside>
+
+      <main class="main-shell">
+        <header class="page-header" id="overview">
+          <div>
+            <p class="eyebrow">Overview</p>
+            <h1>Build a week you can actually follow.</h1>
+            <p class="page-subtitle">
+              UMass Study Partner turns assignments, recruiting, and life admin into adaptive weekly plans that can
+              recover when reality changes.
+            </p>
+          </div>
+
+          <section class="summary-panel">
+            <div class="summary-top">
+              <div>
+                <p class="eyebrow">Plan Signals</p>
+                <h2>Quality snapshot</h2>
+              </div>
+              <span id="planBadge" class="plan-badge">Waiting for a plan</span>
+            </div>
+            <div id="scoreSummary" class="score-grid"></div>
+            <div id="planMetrics" class="metric-grid"></div>
+          </section>
+        </header>
+
+        <section class="content-grid">
+          <div class="primary-column">
+            <section class="module-card" id="planner">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Planner</p>
+                  <h2>Strategy-Aware Weekly Plan</h2>
+                  <p class="module-subtitle">
+                    Choose a planning policy, then inspect balance, consistency, and overload tradeoffs.
+                  </p>
+                </div>
+                <div class="toolbar compact-toolbar">
+                  <label>
+                    Week Start
+                    <input id="weekStart" type="date" />
+                  </label>
+                  <label>
+                    Strategy
+                    <select id="strategySelect"></select>
+                  </label>
+                  <label>
+                    Preferred Block
+                    <input id="blockMinutes" type="number" value="90" min="30" max="180" />
+                  </label>
+                  <button id="generatePlan" class="secondary action-button">Refresh Plan</button>
+                </div>
+              </div>
+              <div id="alerts" class="alert-stack"></div>
+              <div id="weekPlan" class="schedule-board empty-state">Generate a plan to see the week layout.</div>
+            </section>
+
+            <section class="module-card" id="intake">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Task Intake</p>
+                  <h2>From Brain Dump to Structured Work</h2>
+                  <p class="module-subtitle">
+                    Use the parser to turn messy notes into clean tasks before scheduling the week.
+                  </p>
+                </div>
+                <button id="parseDump" class="secondary">Parse Tasks</button>
+              </div>
+
+              <div class="intake-grid">
+                <div class="submodule">
+                  <h3>Brain Dump</h3>
+                  <p>Paste everything that is on your mind. The parser will suggest schedulable task entries.</p>
+                  <textarea
+                    id="brainDump"
+                    rows="10"
+                    placeholder="Example:
+- Finish COMPSCI project milestone
+- Send recruiter follow-up
 - Gym on Thursday
-- Draft systems project milestone"></textarea>
-          <div class="actions">
-            <button id="parseDump">Parse Tasks</button>
-            <button id="loadSeed" class="secondary">Load Seed Plan</button>
-          </div>
-          <div id="parsedTasks" class="list"></div>
-        </section>
+- Review lecture notes before quiz"
+                  ></textarea>
+                </div>
 
-        <section class="panel">
-          <h2>Create Weekly Plan</h2>
-          <div class="form-grid">
-            <label>
-              Week Start
-              <input id="weekStart" type="date" />
-            </label>
-            <label>
-              Focus Start
-              <input id="focusStart" type="time" value="09:00" />
-            </label>
-            <label>
-              Focus End
-              <input id="focusEnd" type="time" value="18:00" />
-            </label>
-            <label>
-              Sleep Start
-              <input id="sleepStart" type="time" value="23:00" />
-            </label>
-            <label>
-              Sleep End
-              <input id="sleepEnd" type="time" value="07:00" />
-            </label>
-            <label>
-              Preferred Block (minutes)
-              <input id="blockMinutes" type="number" value="90" min="30" max="180" />
-            </label>
-          </div>
-          <div class="actions">
-            <button id="generatePlan">Generate Plan</button>
-          </div>
-          <div id="scoreSummary" class="score-grid"></div>
-          <div id="alerts" class="list"></div>
-        </section>
+                <div class="submodule">
+                  <h3>Parsed Tasks</h3>
+                  <p>Preview the structure before adding similar tasks into the planner workflow.</p>
+                  <div id="parsedTasks" class="list"></div>
+                </div>
+              </div>
+            </section>
 
-        <section class="panel wide">
-          <h2>Weekly Plan</h2>
-          <div id="weekPlan" class="schedule"></div>
-        </section>
+            <section class="module-card" id="repair">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Adaptive Repair</p>
+                  <h2>Repair Lab</h2>
+                  <p class="module-subtitle">
+                    Delay one task, compare a hand-picked strategy against the learned selector, and inspect the new
+                    plan.
+                  </p>
+                </div>
+              </div>
 
-        <section class="panel">
-          <h2>Check-In</h2>
-          <div class="form-grid compact">
-            <label>
-              Energy
-              <input id="energy" type="number" value="3" min="1" max="5" />
-            </label>
-            <label>
-              Stress
-              <input id="stress" type="number" value="3" min="1" max="5" />
-            </label>
-            <label>
-              Confidence
-              <input id="confidence" type="number" value="3" min="1" max="5" />
-            </label>
-          </div>
-          <textarea id="checkinNote" rows="4" placeholder="How are you feeling this week?"></textarea>
-          <div class="actions">
-            <button id="submitCheckin">Update Insights</button>
-          </div>
-          <div id="insights" class="list"></div>
-        </section>
+              <div class="repair-grid">
+                <label>
+                  Delayed Task
+                  <select id="repairTask"></select>
+                </label>
+                <label>
+                  Repair Strategy
+                  <select id="repairStrategy"></select>
+                </label>
+                <label>
+                  Training Episodes
+                  <input id="trainEpisodes" type="number" value="60" min="20" max="300" />
+                </label>
+                <label>
+                  Seed
+                  <input id="trainSeed" type="number" value="11" min="0" />
+                </label>
+                <label class="wide-field">
+                  Delay Reason
+                  <input id="repairReason" value="Missed the planned deep-work block." />
+                </label>
+              </div>
 
-        <section class="panel">
-          <h2>Current Tasks</h2>
-          <div id="taskList" class="list"></div>
+              <div class="toolbar">
+                <button id="replanStrategy">Replan With Strategy</button>
+                <button id="replanRL" class="secondary">Replan With RL</button>
+                <button id="trainSelector" class="secondary">Train Selector</button>
+              </div>
+
+              <div class="lab-grid">
+                <div class="submodule">
+                  <h3>Repair Result</h3>
+                  <div id="repairSummary" class="list compact-list"></div>
+                </div>
+
+                <div class="submodule">
+                  <h3>Selector Training</h3>
+                  <div id="selectorSummary" class="list compact-list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="secondary-column">
+            <section class="module-card sticky-module">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Preferences</p>
+                  <h2>Planning Constraints</h2>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Focus Start
+                  <input id="focusStart" type="time" value="09:00" />
+                </label>
+                <label>
+                  Focus End
+                  <input id="focusEnd" type="time" value="18:00" />
+                </label>
+                <label>
+                  Sleep Start
+                  <input id="sleepStart" type="time" value="23:00" />
+                </label>
+                <label>
+                  Sleep End
+                  <input id="sleepEnd" type="time" value="07:00" />
+                </label>
+                <label>
+                  Break Minutes
+                  <input id="breakMinutes" type="number" value="15" min="5" max="45" />
+                </label>
+                <label>
+                  Max Deep Blocks / Day
+                  <input id="maxDeepBlocks" type="number" value="3" min="1" max="6" />
+                </label>
+              </div>
+            </section>
+
+            <section class="module-card" id="insights-section">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Check-In</p>
+                  <h2>Energy and Stress</h2>
+                </div>
+              </div>
+              <div class="form-grid three-up">
+                <label>
+                  Energy
+                  <input id="energy" type="number" value="3" min="1" max="5" />
+                </label>
+                <label>
+                  Stress
+                  <input id="stress" type="number" value="3" min="1" max="5" />
+                </label>
+                <label>
+                  Confidence
+                  <input id="confidence" type="number" value="3" min="1" max="5" />
+                </label>
+              </div>
+              <textarea id="checkinNote" rows="5" placeholder="How are you feeling about this week?"></textarea>
+              <div class="toolbar">
+                <button id="submitCheckin">Update Insights</button>
+              </div>
+              <div id="insights" class="list"></div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Tasks</p>
+                  <h2>Current Work</h2>
+                </div>
+              </div>
+              <div id="taskList" class="list"></div>
+            </section>
+          </div>
         </section>
       </main>
     </div>

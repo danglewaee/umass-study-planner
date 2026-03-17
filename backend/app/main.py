@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import timedelta
 
@@ -26,7 +26,7 @@ from .models import (
 from .planner import available_strategies, derive_user_insights, generate_weekly_plan, parse_brain_dump
 from .store import store
 
-app = FastAPI(title="BalanceOS API", version="0.1.0")
+app = FastAPI(title="UMass Study Partner API", version="0.1.0")
 trained_selector: TrainedRepairSelector | None = None
 
 app.add_middleware(
@@ -162,3 +162,4 @@ def seed_plan() -> WeeklyPlanResponse:
     if not week_start:
         raise HTTPException(status_code=400, detail="No tasks available")
     return generate_weekly_plan(store.list_tasks(), week_start, store.get_preferences())
+
