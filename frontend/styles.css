@@ -52,21 +52,21 @@ button {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 28px 22px;
+  padding: 24px 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 16%),
     linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-deep) 100%);
   color: var(--sidebar-text);
   display: grid;
   align-content: start;
-  gap: 22px;
+  gap: 18px;
 }
 
 .sidebar-brand {
@@ -106,7 +106,7 @@ h3,
 
 .sidebar-nav {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sidebar-nav a {
@@ -125,7 +125,7 @@ h3,
 }
 
 .sidebar-card {
-  padding: 18px;
+  padding: 16px;
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -149,23 +149,17 @@ h3,
 
 .sidebar-actions {
   display: grid;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.sidebar-note {
-  margin: 0;
-  color: var(--sidebar-text);
-  line-height: 1.55;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .main-shell {
-  padding: 30px;
+  padding: 22px;
 }
 
 .page-view {
   display: none;
-  gap: 22px;
+  gap: 18px;
 }
 
 .page-view.active {
@@ -201,7 +195,7 @@ p {
 
 h1 {
   max-width: 12ch;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   font-size: clamp(2.5rem, 5vw, 4.2rem);
   line-height: 0.94;
   letter-spacing: -0.06em;
@@ -223,7 +217,6 @@ h3 {
 .task-meta small,
 .item small,
 label,
-.sidebar-note,
 .metric-card span,
 .score-pill span,
 .stat-card span {
@@ -256,35 +249,39 @@ label,
 .overview-shell,
 .page-grid {
   display: grid;
-  gap: 22px;
+  gap: 18px;
 }
 
 .overview-shell {
-  grid-template-columns: minmax(0, 1.15fr) 320px;
+  grid-template-columns: minmax(0, 1.2fr) 300px;
 }
 
 .overview-hero {
   display: grid;
-  gap: 10px;
+  gap: 4px;
   align-content: start;
+  padding-top: 18px;
+  padding-bottom: 18px;
 }
 
 .project-title {
   max-width: none;
+  margin-bottom: 0;
+  font-size: clamp(2.4rem, 4.4vw, 3.8rem);
 }
 
 .compact-head {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .overview-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .overview-stat {
-  padding: 14px;
+  padding: 12px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
@@ -299,18 +296,16 @@ label,
 
 .component-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .component-card {
   display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.component-card-wide {
-  grid-column: span 2;
+  gap: 12px;
+  align-content: space-between;
+  min-height: 160px;
+  padding: 20px;
 }
 
 .planner-layout {
@@ -436,7 +431,7 @@ textarea:focus {
 }
 
 button {
-  min-height: 44px;
+  min-height: 42px;
   padding: 10px 15px;
   border-radius: 999px;
   border: 1px solid var(--accent);
@@ -635,11 +630,7 @@ button.secondary {
 
   .component-grid,
   .overview-stat-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .component-card-wide {
-    grid-column: span 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sticky-module {
