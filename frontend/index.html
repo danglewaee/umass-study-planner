@@ -24,11 +24,12 @@
         </div>
 
         <nav class="sidebar-nav">
-          <a href="#overview">Overview</a>
-          <a href="#planner">Planner</a>
-          <a href="#intake">Task Intake</a>
-          <a href="#repair">Repair Lab</a>
-          <a href="#insights-section">Insights</a>
+          <a href="#overview" data-route-link="overview">Overview</a>
+          <a href="#planner" data-route-link="planner">Planner</a>
+          <a href="#intake" data-route-link="intake">Task Intake</a>
+          <a href="#tasks" data-route-link="tasks">Tasks</a>
+          <a href="#repair" data-route-link="repair">Repair Lab</a>
+          <a href="#insights" data-route-link="insights">Insights</a>
         </nav>
 
         <section class="sidebar-card">
@@ -40,50 +41,106 @@
           </div>
         </section>
 
-        <section class="sidebar-card">
-          <p class="sidebar-label">Current build highlights</p>
-          <ul class="capability-list">
-            <li>Strategy-aware weekly planning</li>
-            <li>Adaptive replanning when work slips</li>
-            <li>RL-based repair strategy selection</li>
-            <li>Plan quality metrics and recovery signals</li>
-          </ul>
+        <section class="sidebar-card compact-card">
+          <p class="sidebar-label">Navigation note</p>
+          <p class="sidebar-note">
+            Each workflow now lives on its own page so the demo stays lighter and easier to follow.
+          </p>
         </section>
       </aside>
 
       <main class="main-shell">
-        <header class="page-header" id="overview">
-          <div>
-            <p class="eyebrow">Overview</p>
-            <h1>Build a week you can actually follow.</h1>
-            <p class="page-subtitle">
-              UMass Study Partner turns assignments, recruiting, and life admin into adaptive weekly plans that can
-              recover when reality changes.
-            </p>
-          </div>
-
-          <section class="summary-panel">
-            <div class="summary-top">
-              <div>
-                <p class="eyebrow">Plan Signals</p>
-                <h2>Quality snapshot</h2>
-              </div>
-              <span id="planBadge" class="plan-badge">Waiting for a plan</span>
+        <section class="page-view" data-view="overview">
+          <header class="page-banner hero-banner">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h1>Move through the planner one step at a time.</h1>
+              <p class="page-subtitle">
+                The product is now split into smaller pages so each workflow feels focused instead of crowded.
+              </p>
             </div>
-            <div id="scoreSummary" class="score-grid"></div>
-            <div id="planMetrics" class="metric-grid"></div>
-          </section>
-        </header>
 
-        <section class="content-grid">
-          <div class="primary-column">
-            <section class="module-card" id="planner">
+            <section class="module-card banner-card">
+              <p class="eyebrow">Suggested Flow</p>
+              <h2>Recommended demo order</h2>
+              <div class="flow-list">
+                <div class="flow-item"><span>1</span><p>Parse tasks on Task Intake.</p></div>
+                <div class="flow-item"><span>2</span><p>Generate a weekly plan on Planner.</p></div>
+                <div class="flow-item"><span>3</span><p>Inspect current work on Tasks.</p></div>
+                <div class="flow-item"><span>4</span><p>Run disruptions inside Repair Lab.</p></div>
+              </div>
+            </section>
+          </header>
+
+          <section class="jump-grid">
+            <article class="module-card jump-card">
+              <p class="eyebrow">Planner</p>
+              <h2>Build the week</h2>
+              <p>Generate a plan, compare strategies, and inspect quality signals without extra distractions.</p>
+              <button type="button" data-route-target="planner">Open Planner</button>
+            </article>
+
+            <article class="module-card jump-card">
+              <p class="eyebrow">Task Intake</p>
+              <h2>Start from a brain dump</h2>
+              <p>Turn messy notes into structured work items before you schedule anything.</p>
+              <button type="button" class="secondary" data-route-target="intake">Open Task Intake</button>
+            </article>
+
+            <article class="module-card jump-card">
+              <p class="eyebrow">Tasks</p>
+              <h2>See current work cleanly</h2>
+              <p>Review the active task list on its own page instead of keeping it on every screen.</p>
+              <button type="button" class="secondary" data-route-target="tasks">Open Tasks</button>
+            </article>
+
+            <article class="module-card jump-card">
+              <p class="eyebrow">Repair Lab</p>
+              <h2>Test disruptions separately</h2>
+              <p>Delay a task, train the selector, and compare repairs without cluttering the main planner.</p>
+              <button type="button" class="secondary" data-route-target="repair">Open Repair Lab</button>
+            </article>
+
+            <article class="module-card jump-card">
+              <p class="eyebrow">Insights</p>
+              <h2>Reflect on energy and stress</h2>
+              <p>Keep check-ins and coaching guidance in one dedicated page.</p>
+              <button type="button" class="secondary" data-route-target="insights">Open Insights</button>
+            </article>
+          </section>
+        </section>
+
+        <section class="page-view" data-view="planner">
+          <header class="page-banner">
+            <div>
+              <p class="eyebrow">Planner</p>
+              <h1>Strategy-aware weekly planning.</h1>
+              <p class="page-subtitle">
+                Generate the week on one page, then inspect balance, consistency, and overload signals side by side.
+              </p>
+            </div>
+
+            <section class="summary-panel">
+              <div class="summary-top">
+                <div>
+                  <p class="eyebrow">Plan Signals</p>
+                  <h2>Quality snapshot</h2>
+                </div>
+                <span id="planBadge" class="plan-badge">Waiting for a plan</span>
+              </div>
+              <div id="scoreSummary" class="score-grid"></div>
+              <div id="planMetrics" class="metric-grid"></div>
+            </section>
+          </header>
+
+          <section class="page-grid planner-layout">
+            <section class="module-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Planner</p>
-                  <h2>Strategy-Aware Weekly Plan</h2>
+                  <p class="eyebrow">Generate</p>
+                  <h2>Weekly Plan</h2>
                   <p class="module-subtitle">
-                    Choose a planning policy, then inspect balance, consistency, and overload tradeoffs.
+                    Choose a strategy, tune your block size, then refresh the week layout.
                   </p>
                 </div>
                 <div class="toolbar compact-toolbar">
@@ -106,50 +163,147 @@
               <div id="weekPlan" class="schedule-board empty-state">Generate a plan to see the week layout.</div>
             </section>
 
-            <section class="module-card" id="intake">
+            <aside class="page-sidebar">
+              <section class="module-card sticky-module">
+                <div class="module-head">
+                  <div>
+                    <p class="eyebrow">Preferences</p>
+                    <h2>Planning Constraints</h2>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Focus Start
+                    <input id="focusStart" type="time" value="09:00" />
+                  </label>
+                  <label>
+                    Focus End
+                    <input id="focusEnd" type="time" value="18:00" />
+                  </label>
+                  <label>
+                    Sleep Start
+                    <input id="sleepStart" type="time" value="23:00" />
+                  </label>
+                  <label>
+                    Sleep End
+                    <input id="sleepEnd" type="time" value="07:00" />
+                  </label>
+                  <label>
+                    Break Minutes
+                    <input id="breakMinutes" type="number" value="15" min="5" max="45" />
+                  </label>
+                  <label>
+                    Max Deep Blocks / Day
+                    <input id="maxDeepBlocks" type="number" value="3" min="1" max="6" />
+                  </label>
+                </div>
+              </section>
+            </aside>
+          </section>
+        </section>
+
+        <section class="page-view" data-view="intake">
+          <header class="page-banner simple-banner">
+            <div>
+              <p class="eyebrow">Task Intake</p>
+              <h1>Go from messy notes to structured work.</h1>
+              <p class="page-subtitle">
+                Keep task intake on its own page so the input flow feels like a clean first step.
+              </p>
+            </div>
+            <section class="module-card banner-card compact-banner">
+              <p class="eyebrow">Why separate it?</p>
+              <h2>Better onboarding</h2>
+              <p class="module-subtitle">This page is now focused purely on turning free text into schedulable tasks.</p>
+            </section>
+          </header>
+
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Task Intake</p>
-                  <h2>From Brain Dump to Structured Work</h2>
-                  <p class="module-subtitle">
-                    Use the parser to turn messy notes into clean tasks before scheduling the week.
-                  </p>
+                  <p class="eyebrow">Input</p>
+                  <h2>Brain Dump</h2>
+                  <p class="module-subtitle">Paste everything on your mind. The parser will suggest task structure.</p>
                 </div>
                 <button id="parseDump" class="secondary">Parse Tasks</button>
               </div>
-
-              <div class="intake-grid">
-                <div class="submodule">
-                  <h3>Brain Dump</h3>
-                  <p>Paste everything that is on your mind. The parser will suggest schedulable task entries.</p>
-                  <textarea
-                    id="brainDump"
-                    rows="10"
-                    placeholder="Example:
+              <textarea
+                id="brainDump"
+                rows="14"
+                placeholder="Example:
 - Finish COMPSCI project milestone
 - Send recruiter follow-up
 - Gym on Thursday
 - Review lecture notes before quiz"
-                  ></textarea>
-                </div>
-
-                <div class="submodule">
-                  <h3>Parsed Tasks</h3>
-                  <p>Preview the structure before adding similar tasks into the planner workflow.</p>
-                  <div id="parsedTasks" class="list"></div>
-                </div>
-              </div>
+              ></textarea>
             </section>
 
-            <section class="module-card" id="repair">
+            <section class="module-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Adaptive Repair</p>
-                  <h2>Repair Lab</h2>
-                  <p class="module-subtitle">
-                    Delay one task, compare a hand-picked strategy against the learned selector, and inspect the new
-                    plan.
-                  </p>
+                  <p class="eyebrow">Output</p>
+                  <h2>Parsed Tasks</h2>
+                  <p class="module-subtitle">Use this preview before you move into planning or repair.</p>
+                </div>
+              </div>
+              <div id="parsedTasks" class="list"></div>
+            </section>
+          </section>
+        </section>
+
+        <section class="page-view" data-view="tasks">
+          <header class="page-banner simple-banner">
+            <div>
+              <p class="eyebrow">Tasks</p>
+              <h1>Review current work without planner noise.</h1>
+              <p class="page-subtitle">
+                Keep the task list on its own page so you can inspect workload before deciding what to generate or repair.
+              </p>
+            </div>
+            <section class="module-card banner-card compact-banner">
+              <p class="eyebrow">Use this page for</p>
+              <h2>Task status checks</h2>
+              <p class="module-subtitle">See what is pending, delayed, or completed before choosing a repair target.</p>
+            </section>
+          </header>
+
+          <section id="taskStats" class="task-stat-grid"></section>
+
+          <section class="module-card">
+            <div class="module-head">
+              <div>
+                <p class="eyebrow">Current Work</p>
+                <h2>Task List</h2>
+              </div>
+            </div>
+            <div id="taskList" class="list"></div>
+          </section>
+        </section>
+
+        <section class="page-view" data-view="repair">
+          <header class="page-banner simple-banner">
+            <div>
+              <p class="eyebrow">Repair Lab</p>
+              <h1>Handle disruptions on a dedicated page.</h1>
+              <p class="page-subtitle">
+                Delay a task, compare a chosen strategy against RL repair, and keep the experiment separate from planning.
+              </p>
+            </div>
+            <section class="module-card banner-card compact-banner">
+              <p class="eyebrow">Why separate it?</p>
+              <h2>Cleaner demo story</h2>
+              <p class="module-subtitle">Planning builds the week. Repair Lab explains what happens when the week breaks.</p>
+            </section>
+          </header>
+
+          <section class="page-grid repair-layout">
+            <section class="module-card repair-controls-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Run Repair</p>
+                  <h2>Repair Controls</h2>
+                  <p class="module-subtitle">Choose the delayed task, optional strategy, and training setup.</p>
                 </div>
               </div>
 
@@ -181,58 +335,48 @@
                 <button id="replanRL" class="secondary">Replan With RL</button>
                 <button id="trainSelector" class="secondary">Train Selector</button>
               </div>
-
-              <div class="lab-grid">
-                <div class="submodule">
-                  <h3>Repair Result</h3>
-                  <div id="repairSummary" class="list compact-list"></div>
-                </div>
-
-                <div class="submodule">
-                  <h3>Selector Training</h3>
-                  <div id="selectorSummary" class="list compact-list"></div>
-                </div>
-              </div>
             </section>
-          </div>
 
-          <div class="secondary-column">
-            <section class="module-card sticky-module">
+            <section class="module-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Preferences</p>
-                  <h2>Planning Constraints</h2>
+                  <p class="eyebrow">Result</p>
+                  <h2>Repair Summary</h2>
                 </div>
               </div>
-              <div class="form-grid">
-                <label>
-                  Focus Start
-                  <input id="focusStart" type="time" value="09:00" />
-                </label>
-                <label>
-                  Focus End
-                  <input id="focusEnd" type="time" value="18:00" />
-                </label>
-                <label>
-                  Sleep Start
-                  <input id="sleepStart" type="time" value="23:00" />
-                </label>
-                <label>
-                  Sleep End
-                  <input id="sleepEnd" type="time" value="07:00" />
-                </label>
-                <label>
-                  Break Minutes
-                  <input id="breakMinutes" type="number" value="15" min="5" max="45" />
-                </label>
-                <label>
-                  Max Deep Blocks / Day
-                  <input id="maxDeepBlocks" type="number" value="3" min="1" max="6" />
-                </label>
-              </div>
+              <div id="repairSummary" class="list compact-list"></div>
             </section>
 
-            <section class="module-card" id="insights-section">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Selector</p>
+                  <h2>Training Summary</h2>
+                </div>
+              </div>
+              <div id="selectorSummary" class="list compact-list"></div>
+            </section>
+          </section>
+        </section>
+
+        <section class="page-view" data-view="insights">
+          <header class="page-banner simple-banner">
+            <div>
+              <p class="eyebrow">Insights</p>
+              <h1>Reflect on energy, stress, and consistency.</h1>
+              <p class="page-subtitle">
+                Keep check-ins and coaching guidance on one page so the feedback loop stays readable.
+              </p>
+            </div>
+            <section class="module-card banner-card compact-banner">
+              <p class="eyebrow">Feedback Loop</p>
+              <h2>Update signals separately</h2>
+              <p class="module-subtitle">The planner explains the week. This page explains how the student is feeling about it.</p>
+            </section>
+          </header>
+
+          <section class="page-grid two-column-layout insights-layout">
+            <section class="module-card">
               <div class="module-head">
                 <div>
                   <p class="eyebrow">Check-In</p>
@@ -253,23 +397,22 @@
                   <input id="confidence" type="number" value="3" min="1" max="5" />
                 </label>
               </div>
-              <textarea id="checkinNote" rows="5" placeholder="How are you feeling about this week?"></textarea>
+              <textarea id="checkinNote" rows="8" placeholder="How are you feeling about this week?"></textarea>
               <div class="toolbar">
                 <button id="submitCheckin">Update Insights</button>
               </div>
-              <div id="insights" class="list"></div>
             </section>
 
             <section class="module-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Tasks</p>
-                  <h2>Current Work</h2>
+                  <p class="eyebrow">Guidance</p>
+                  <h2>Current Insights</h2>
                 </div>
               </div>
-              <div id="taskList" class="list"></div>
+              <div id="insights" class="list"></div>
             </section>
-          </div>
+          </section>
         </section>
       </main>
     </div>

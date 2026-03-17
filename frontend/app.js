@@ -1,9 +1,11 @@
 const byId = (id) => document.getElementById(id);
+const ROUTES = ["overview", "planner", "intake", "tasks", "repair", "insights"];
 
 const state = {
   apiBase: byId("apiBase").value,
   strategies: [],
   tasks: [],
+  route: "overview",
 };
 
 function escapeHtml(value) {
@@ -24,6 +26,37 @@ function formatLabel(value) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function getRoute() {
+  const route = window.location.hash.replace(/^#/, "") || "overview";
+  return ROUTES.includes(route) ? route : "overview";
+}
+
+function navigateTo(route) {
+  const target = ROUTES.includes(route) ? route : "overview";
+  if (window.location.hash === `#${target}`) {
+    applyRoute(target);
+    return;
+  }
+  window.location.hash = target;
+}
+
+function applyRoute(route = getRoute()) {
+  state.route = route;
+
+  document.querySelectorAll(".page-view").forEach((view) => {
+    view.classList.toggle("active", view.dataset.view === route);
+  });
+
+  document.querySelectorAll("[data-route-link]").forEach((link) => {
+    const isActive = link.dataset.routeLink === route;
+    link.classList.toggle("active", isActive);
+    link.setAttribute("aria-current", isActive ? "page" : "false");
+  });
+
+  document.title = route === "overview" ? "UMass Study Partner" : `UMass Study Partner - ${formatLabel(route)}`;
+  window.scrollTo(0, 0);
 }
 
 function api(path, options = {}) {
@@ -119,9 +152,40 @@ function populateRepairTasks(tasks) {
   }
 }
 
+function renderTaskStats(tasks) {
+  const container = byId("taskStats");
+  const counts = {
+    total: tasks.length,
+    pending: tasks.filter((task) => task.status === "pending").length,
+    scheduled: tasks.filter((task) => task.status === "scheduled").length,
+    delayed: tasks.filter((task) => task.status === "delayed").length,
+    completed: tasks.filter((task) => task.status === "completed").length,
+  };
+
+  const cards = [
+    ["Total Tasks", counts.total],
+    ["Pending", counts.pending],
+    ["Scheduled", counts.scheduled],
+    ["Delayed", counts.delayed],
+    ["Completed", counts.completed],
+  ];
+
+  container.innerHTML = cards
+    .map(
+      ([label, value]) => `
+        <article class="stat-card">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `
+    )
+    .join("");
+}
+
 function renderTasks(tasks) {
   state.tasks = tasks;
   populateRepairTasks(tasks);
+  renderTaskStats(tasks);
   renderList(
     "taskList",
     tasks,
@@ -362,6 +426,7 @@ async function parseBrainDump() {
     body: JSON.stringify({ text }),
   });
   renderParsedTasks(parsed.tasks);
+  navigateTo("intake");
 }
 
 async function generatePlan() {
@@ -375,6 +440,8 @@ async function generatePlan() {
     body: JSON.stringify(payload),
   });
   renderPlan(plan, `Generated with ${formatLabel(plan.strategy_used)}`, "good");
+  navigateTo("planner");
+  return plan;
 }
 
 async function replanWithStrategy() {
@@ -385,6 +452,7 @@ async function replanWithStrategy() {
   renderPlan(plan, `Replanned with ${formatLabel(plan.strategy_used)}`, "warning");
   renderRepairSummary(plan, "strategy");
   await loadTasks();
+  navigateTo("repair");
 }
 
 async function replanWithRL() {
@@ -396,6 +464,7 @@ async function replanWithRL() {
   renderPlan(result.result, `RL selected ${formatLabel(result.chosen_strategy)}`, "accent");
   renderRepairSummary(result, "rl");
   await loadTasks();
+  navigateTo("repair");
 }
 
 async function trainSelector() {
@@ -408,6 +477,7 @@ async function trainSelector() {
     body: JSON.stringify(payload),
   });
   renderSelectorSummary(summary);
+  navigateTo("repair");
 }
 
 async function submitCheckin() {
@@ -422,14 +492,32 @@ async function submitCheckin() {
     body: JSON.stringify(payload),
   });
   renderInsights(insights);
+  navigateTo("insights");
 }
 
 async function loadSeedPlan() {
   const plan = await api("/demo/seed-plan");
   renderPlan(plan, "Loaded demo seed plan", "neutral");
+  navigateTo("planner");
+}
+
+function bindRoutes() {
+  document.querySelectorAll("[data-route-link]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigateTo(link.dataset.routeLink);
+    });
+  });
+
+  document.querySelectorAll("[data-route-target]").forEach((button) => {
+    button.addEventListener("click", () => navigateTo(button.dataset.routeTarget));
+  });
+
+  window.addEventListener("hashchange", () => applyRoute());
 }
 
 function bindEvents() {
+  bindRoutes();
   byId("parseDump").addEventListener("click", () => parseBrainDump().catch(handleError));
   byId("generatePlan").addEventListener("click", () => generatePlan().catch(handleError));
   byId("generatePlanPrimary").addEventListener("click", () => generatePlan().catch(handleError));
@@ -450,6 +538,7 @@ async function init() {
   bindEvents();
   renderScores();
   renderMetrics(null);
+  renderTaskStats([]);
   renderParsedTasks([]);
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
@@ -459,6 +548,7 @@ async function init() {
     final_epsilon: 0,
     action_counts: {},
   });
+  applyRoute();
   await Promise.all([loadTasks(), loadInsights(), loadStrategies()]).catch(handleError);
 }
 
