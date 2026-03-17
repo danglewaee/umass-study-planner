@@ -1,8 +1,10 @@
 ﻿const byId = (id) => document.getElementById(id);
 const ROUTES = ["overview", "planner", "intake", "tasks", "repair", "insights"];
 
+const apiBaseInput = byId("apiBase");
+
 const state = {
-  apiBase: byId("apiBase").value,
+  apiBase: apiBaseInput.value,
   strategies: [],
   tasks: [],
   route: "overview",
@@ -60,8 +62,49 @@ function applyRoute(route = getRoute()) {
   window.scrollTo(0, 0);
 }
 
+function getApiCandidates() {
+  const host = window.location.hostname || "127.0.0.1";
+  return [...new Set(
+    [
+      apiBaseInput.value,
+      `http://${host}:8011`,
+      `http://${host}:8000`,
+      "http://127.0.0.1:8011",
+      "http://127.0.0.1:8000",
+    ]
+      .filter(Boolean)
+      .map((value) => value.replace(/\/$/, ""))
+  )];
+}
+
+async function canReachApi(baseUrl) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 1200);
+
+  try {
+    const response = await fetch(`${baseUrl}/planner/strategies`, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function resolveApiBase() {
+  for (const candidate of getApiCandidates()) {
+    if (await canReachApi(candidate)) {
+      apiBaseInput.value = candidate;
+      state.apiBase = candidate;
+      return;
+    }
+  }
+
+  state.apiBase = apiBaseInput.value.trim().replace(/\/$/, "");
+}
+
 function api(path, options = {}) {
-  state.apiBase = (byId("apiBase").value.trim() || state.apiBase).replace(/\/$/, "");
+  state.apiBase = (apiBaseInput.value.trim() || state.apiBase).replace(/\/$/, "");
   return fetch(`${state.apiBase}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
@@ -566,6 +609,7 @@ function handleError(error) {
 async function init() {
   setWeekStartDefault();
   bindEvents();
+  await resolveApiBase();
   renderScores();
   renderMetrics(null);
   renderTaskStats([]);
