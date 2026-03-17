@@ -51,60 +51,60 @@
 
       <main class="main-shell">
         <section class="page-view" data-view="overview">
-          <header class="page-banner hero-banner">
-            <div>
-              <p class="eyebrow">Overview</p>
-              <h1>Move through the planner one step at a time.</h1>
+          <header class="overview-shell">
+            <section class="module-card overview-hero">
+              <p class="eyebrow">Project</p>
+              <h1 class="project-title">UMass Study Partner</h1>
               <p class="page-subtitle">
-                The product is now split into smaller pages so each workflow feels focused instead of crowded.
+                Adaptive weekly planning for real student constraints, split into smaller workflows so the product feels
+                cleaner from the first screen.
               </p>
-            </div>
+            </section>
 
-            <section class="module-card banner-card">
-              <p class="eyebrow">Suggested Flow</p>
-              <h2>Recommended demo order</h2>
-              <div class="flow-list">
-                <div class="flow-item"><span>1</span><p>Parse tasks on Task Intake.</p></div>
-                <div class="flow-item"><span>2</span><p>Generate a weekly plan on Planner.</p></div>
-                <div class="flow-item"><span>3</span><p>Inspect current work on Tasks.</p></div>
-                <div class="flow-item"><span>4</span><p>Run disruptions inside Repair Lab.</p></div>
+            <section class="module-card overview-status">
+              <div class="module-head compact-head">
+                <div>
+                  <p class="eyebrow">At A Glance</p>
+                  <h2>Workspace Snapshot</h2>
+                </div>
               </div>
+              <div id="overviewStats" class="overview-stat-grid"></div>
             </section>
           </header>
 
-          <section class="jump-grid">
-            <article class="module-card jump-card">
+          <section class="component-grid">
+            <article class="module-card component-card">
               <p class="eyebrow">Planner</p>
-              <h2>Build the week</h2>
-              <p>Generate a plan, compare strategies, and inspect quality signals without extra distractions.</p>
+              <h2>Build The Week</h2>
+              <p>Generate the plan and inspect balance signals on a dedicated page.</p>
               <button type="button" data-route-target="planner">Open Planner</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card">
               <p class="eyebrow">Task Intake</p>
-              <h2>Start from a brain dump</h2>
-              <p>Turn messy notes into structured work items before you schedule anything.</p>
+              <h2>Parse Brain Dumps</h2>
+              <p>Turn messy notes into structured work without showing the whole dashboard at once.</p>
               <button type="button" class="secondary" data-route-target="intake">Open Task Intake</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card">
               <p class="eyebrow">Tasks</p>
-              <h2>See current work cleanly</h2>
-              <p>Review the active task list on its own page instead of keeping it on every screen.</p>
+              <h2>Review Current Work</h2>
+              <p>Check pending, delayed, and completed tasks on one clean page.</p>
               <button type="button" class="secondary" data-route-target="tasks">Open Tasks</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card">
               <p class="eyebrow">Repair Lab</p>
-              <h2>Test disruptions separately</h2>
-              <p>Delay a task, train the selector, and compare repairs without cluttering the main planner.</p>
+              <h2>Handle Disruptions</h2>
+              <p>Run strategy-based or RL-based replanning separately from the core planner.</p>
               <button type="button" class="secondary" data-route-target="repair">Open Repair Lab</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card component-card-wide">
               <p class="eyebrow">Insights</p>
-              <h2>Reflect on energy and stress</h2>
-              <p>Keep check-ins and coaching guidance in one dedicated page.</p>
+              <h2>Capture How The Week Feels</h2>
+              <p>Keep check-ins and coaching guidance in one focused feedback page.</p>
               <button type="button" class="secondary" data-route-target="insights">Open Insights</button>
             </article>
           </section>

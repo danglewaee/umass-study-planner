@@ -1,4 +1,4 @@
-const byId = (id) => document.getElementById(id);
+ï»¿const byId = (id) => document.getElementById(id);
 const ROUTES = ["overview", "planner", "intake", "tasks", "repair", "insights"];
 
 const state = {
@@ -55,6 +55,7 @@ function applyRoute(route = getRoute()) {
     link.setAttribute("aria-current", isActive ? "page" : "false");
   });
 
+  renderOverviewStats();
   document.title = route === "overview" ? "UMass Study Partner" : `UMass Study Partner - ${formatLabel(route)}`;
   window.scrollTo(0, 0);
 }
@@ -182,10 +183,38 @@ function renderTaskStats(tasks) {
     .join("");
 }
 
+function renderOverviewStats() {
+  const container = byId("overviewStats");
+  if (!container) {
+    return;
+  }
+
+  const delayedCount = state.tasks.filter((task) => task.status === "delayed").length;
+  const activeCount = state.tasks.filter((task) => task.status !== "completed").length;
+  const stats = [
+    ["Active Tasks", activeCount],
+    ["Delayed", delayedCount],
+    ["Strategies", state.strategies.length || "-"],
+    ["Current View", formatLabel(state.route)],
+  ];
+
+  container.innerHTML = stats
+    .map(
+      ([label, value]) => `
+        <article class="overview-stat">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </article>
+      `
+    )
+    .join("");
+}
+
 function renderTasks(tasks) {
   state.tasks = tasks;
   populateRepairTasks(tasks);
   renderTaskStats(tasks);
+  renderOverviewStats();
   renderList(
     "taskList",
     tasks,
@@ -194,7 +223,7 @@ function renderTasks(tasks) {
         <div>
           <strong>${escapeHtml(task.title)}</strong>
           <div class="task-meta">
-            <small>${escapeHtml(formatLabel(task.category))} · due ${escapeHtml(task.deadline)} · ${escapeHtml(task.estimated_minutes)} min</small>
+            <small>${escapeHtml(formatLabel(task.category))} | due ${escapeHtml(task.deadline)} | ${escapeHtml(task.estimated_minutes)} min</small>
           </div>
         </div>
         <span class="status-pill ${escapeHtml(task.status)}">${escapeHtml(formatLabel(task.status))}</span>
@@ -211,7 +240,7 @@ function renderParsedTasks(tasks) {
     (task) => `
       <strong>${escapeHtml(task.title)}</strong>
       <div class="task-meta">
-        <small>${escapeHtml(formatLabel(task.category))} · due ${escapeHtml(task.deadline)} · ${escapeHtml(task.estimated_minutes)} min</small>
+        <small>${escapeHtml(formatLabel(task.category))} | due ${escapeHtml(task.deadline)} | ${escapeHtml(task.estimated_minutes)} min</small>
       </div>
     `,
     "Parse a brain dump to preview structured tasks."
@@ -416,6 +445,7 @@ async function loadStrategies() {
   const payload = await api("/planner/strategies");
   state.strategies = payload.strategies || [];
   populateStrategySelects(state.strategies);
+  renderOverviewStats();
 }
 
 async function parseBrainDump() {
@@ -539,6 +569,7 @@ async function init() {
   renderScores();
   renderMetrics(null);
   renderTaskStats([]);
+  renderOverviewStats();
   renderParsedTasks([]);
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({

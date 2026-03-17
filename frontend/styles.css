@@ -179,10 +179,6 @@ h3,
   gap: 22px;
 }
 
-.hero-banner {
-  grid-template-columns: minmax(0, 1.15fr) 380px;
-}
-
 .simple-banner {
   align-items: start;
 }
@@ -257,47 +253,64 @@ label,
   padding: 20px;
 }
 
-.flow-list {
-  display: grid;
-  gap: 12px;
-}
-
-.flow-item {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.flow-item span {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.flow-item p {
-  margin: 0;
-}
-
-.jump-grid,
+.overview-shell,
 .page-grid {
   display: grid;
   gap: 22px;
 }
 
-.jump-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.overview-shell {
+  grid-template-columns: minmax(0, 1.15fr) 320px;
 }
 
-.jump-card {
+.overview-hero {
   display: grid;
   gap: 10px;
   align-content: start;
+}
+
+.project-title {
+  max-width: none;
+}
+
+.compact-head {
+  margin-bottom: 12px;
+}
+
+.overview-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-stat {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  display: grid;
+  gap: 6px;
+}
+
+.overview-stat strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.15rem;
+}
+
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.component-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.component-card-wide {
+  grid-column: span 2;
 }
 
 .planner-layout {
@@ -610,7 +623,7 @@ button.secondary {
 
 @media (max-width: 1380px) {
   .page-banner,
-  .hero-banner,
+  .overview-shell,
   .planner-layout,
   .repair-layout,
   .two-column-layout,
@@ -620,8 +633,13 @@ button.secondary {
     grid-template-columns: 1fr;
   }
 
-  .jump-grid {
+  .component-grid,
+  .overview-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .component-card-wide {
+    grid-column: span 1;
   }
 
   .sticky-module {
