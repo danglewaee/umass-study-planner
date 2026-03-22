@@ -92,6 +92,52 @@ class FixedCommitment(FixedCommitmentInput):
     created_at: datetime
 
 
+class GoogleAuthStartResponse(BaseModel):
+    authorization_url: str
+
+
+class GoogleCalendarSummary(BaseModel):
+    id: str
+    summary: str
+    primary: bool = False
+    access_role: str = "reader"
+    time_zone: str | None = None
+
+
+class GoogleConnectionStatus(BaseModel):
+    configured: bool
+    connected: bool
+    connected_email: str | None = None
+    last_synced_at: datetime | None = None
+    message: str | None = None
+
+
+class GoogleConnection(BaseModel):
+    profile_id: str
+    email: str
+    access_token: str
+    refresh_token: str
+    scope: str = ""
+    token_expiry: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+    last_synced_at: datetime | None = None
+
+
+class GoogleImportRequest(BaseModel):
+    calendar_id: str = "primary"
+    lookahead_days: int = Field(default=28, ge=7, le=90)
+
+
+class GoogleImportResponse(BaseModel):
+    calendar_id: str
+    imported_commitments: int
+    updated_commitments: int
+    skipped_events: int
+    imported_titles: list[str]
+    message: str
+
+
 class ScheduleBlock(BaseModel):
     id: str
     title: str

@@ -5,7 +5,16 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .models import CheckIn, CheckInInput, FixedCommitment, FixedCommitmentInput, Task, TaskInput, UserPreferences
+from .models import (
+    CheckIn,
+    CheckInInput,
+    FixedCommitment,
+    FixedCommitmentInput,
+    GoogleConnection,
+    Task,
+    TaskInput,
+    UserPreferences,
+)
 
 DEFAULT_PROFILE_ID = "demo-user"
 DB_PATH = Path(__file__).resolve().parents[1] / "data" / "study_partner.sqlite3"
@@ -75,9 +84,40 @@ class SQLiteStore:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS commitment_sources (
+                    commitment_id TEXT PRIMARY KEY,
+                    profile_id TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    calendar_id TEXT NOT NULL,
+                    external_ref TEXT NOT NULL,
+                    last_synced_at TEXT NOT NULL,
+                    UNIQUE(profile_id, provider, calendar_id, external_ref)
+                );
+
+                CREATE TABLE IF NOT EXISTS google_connections (
+                    profile_id TEXT PRIMARY KEY,
+                    email TEXT NOT NULL,
+                    access_token TEXT NOT NULL,
+                    refresh_token TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    token_expiry TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_synced_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS oauth_states (
+                    provider TEXT NOT NULL,
+                    state TEXT PRIMARY KEY,
+                    profile_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_tasks_profile_deadline ON tasks (profile_id, deadline);
                 CREATE INDEX IF NOT EXISTS idx_checkins_profile_created ON check_ins (profile_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_commitments_profile_day ON commitments (profile_id, day_of_week, start);
+                CREATE INDEX IF NOT EXISTS idx_commitment_sources_profile ON commitment_sources (profile_id, provider, calendar_id);
+                CREATE INDEX IF NOT EXISTS idx_oauth_states_provider ON oauth_states (provider, created_at);
                 """
             )
 
@@ -147,6 +187,9 @@ class SQLiteStore:
     def clear_profile(self, profile_id: str) -> None:
         normalized = self._normalize_profile_id(profile_id)
         with self._connect() as connection:
+            connection.execute("DELETE FROM commitment_sources WHERE profile_id = ?", (normalized,))
+            connection.execute("DELETE FROM google_connections WHERE profile_id = ?", (normalized,))
+            connection.execute("DELETE FROM oauth_states WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM tasks WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM check_ins WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM commitments WHERE profile_id = ?", (normalized,))
@@ -314,11 +357,234 @@ class SQLiteStore:
     def delete_commitment(self, commitment_id: str, profile_id: str = DEFAULT_PROFILE_ID) -> bool:
         normalized = self._normalize_profile_id(profile_id)
         with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM commitment_sources WHERE commitment_id = ? AND profile_id = ?",
+                (commitment_id, normalized),
+            )
             cursor = connection.execute(
                 "DELETE FROM commitments WHERE id = ? AND profile_id = ?",
                 (commitment_id, normalized),
             )
         return cursor.rowcount > 0
+
+    def upsert_google_commitment(
+        self,
+        payload: FixedCommitmentInput,
+        profile_id: str,
+        external_ref: str,
+        calendar_id: str,
+    ) -> tuple[FixedCommitment, bool]:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        now = datetime.utcnow()
+        payload_dump = payload.model_dump(mode="json")
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT c.id, c.created_at
+                FROM commitment_sources cs
+                JOIN commitments c ON c.id = cs.commitment_id
+                WHERE cs.profile_id = ? AND cs.provider = ? AND cs.calendar_id = ? AND cs.external_ref = ?
+                """,
+                (normalized, "google_calendar", calendar_id, external_ref),
+            ).fetchone()
+
+            if row:
+                connection.execute(
+                    """
+                    UPDATE commitments
+                    SET title = ?, day_of_week = ?, start = ?, end = ?, kind = ?, location = ?, notes = ?
+                    WHERE id = ? AND profile_id = ?
+                    """,
+                    (
+                        payload_dump["title"],
+                        payload_dump["day_of_week"],
+                        payload_dump["start"],
+                        payload_dump["end"],
+                        payload_dump["kind"],
+                        payload_dump["location"],
+                        payload_dump["notes"],
+                        row["id"],
+                        normalized,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE commitment_sources
+                    SET last_synced_at = ?
+                    WHERE commitment_id = ? AND profile_id = ?
+                    """,
+                    (now.isoformat(), row["id"], normalized),
+                )
+                commitment = connection.execute(
+                    """
+                    SELECT id, title, day_of_week, start, end, kind, location, notes, created_at
+                    FROM commitments
+                    WHERE id = ? AND profile_id = ?
+                    """,
+                    (row["id"], normalized),
+                ).fetchone()
+                return FixedCommitment.model_validate(dict(commitment)), False
+
+            commitment_id = str(uuid4())
+            connection.execute(
+                """
+                INSERT INTO commitments (
+                    id, profile_id, title, day_of_week, start, end, kind, location, notes, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    commitment_id,
+                    normalized,
+                    payload_dump["title"],
+                    payload_dump["day_of_week"],
+                    payload_dump["start"],
+                    payload_dump["end"],
+                    payload_dump["kind"],
+                    payload_dump["location"],
+                    payload_dump["notes"],
+                    now.isoformat(),
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO commitment_sources (
+                    commitment_id, profile_id, provider, calendar_id, external_ref, last_synced_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    commitment_id,
+                    normalized,
+                    "google_calendar",
+                    calendar_id,
+                    external_ref,
+                    now.isoformat(),
+                ),
+            )
+
+        return FixedCommitment(
+            id=commitment_id,
+            created_at=now,
+            **payload.model_dump(),
+        ), True
+
+    def create_oauth_state(self, provider: str, profile_id: str) -> str:
+        normalized = self._normalize_profile_id(profile_id)
+        state = str(uuid4())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO oauth_states (provider, state, profile_id, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (provider, state, normalized, datetime.utcnow().isoformat()),
+            )
+        return state
+
+    def consume_oauth_state(self, provider: str, state: str) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT profile_id FROM oauth_states WHERE provider = ? AND state = ?",
+                (provider, state),
+            ).fetchone()
+            connection.execute(
+                "DELETE FROM oauth_states WHERE provider = ? AND state = ?",
+                (provider, state),
+            )
+        return row["profile_id"] if row else None
+
+    def upsert_google_connection(
+        self,
+        profile_id: str,
+        *,
+        email: str,
+        access_token: str,
+        refresh_token: str,
+        scope: str,
+        token_expiry: datetime | None,
+    ) -> GoogleConnection:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        now = datetime.utcnow()
+        expiry_value = token_expiry.isoformat() if token_expiry else None
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO google_connections (
+                    profile_id, email, access_token, refresh_token, scope, token_expiry, created_at, updated_at, last_synced_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(
+                    (SELECT last_synced_at FROM google_connections WHERE profile_id = ?),
+                    NULL
+                ))
+                ON CONFLICT(profile_id) DO UPDATE SET
+                    email = excluded.email,
+                    access_token = excluded.access_token,
+                    refresh_token = excluded.refresh_token,
+                    scope = excluded.scope,
+                    token_expiry = excluded.token_expiry,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    normalized,
+                    email,
+                    access_token,
+                    refresh_token,
+                    scope,
+                    expiry_value,
+                    now.isoformat(),
+                    now.isoformat(),
+                    normalized,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT profile_id, email, access_token, refresh_token, scope, token_expiry, created_at, updated_at, last_synced_at
+                FROM google_connections
+                WHERE profile_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+
+        return GoogleConnection.model_validate(dict(row))
+
+    def get_google_connection(self, profile_id: str) -> GoogleConnection | None:
+        normalized = self._normalize_profile_id(profile_id)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT profile_id, email, access_token, refresh_token, scope, token_expiry, created_at, updated_at, last_synced_at
+                FROM google_connections
+                WHERE profile_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        return GoogleConnection.model_validate(dict(row)) if row else None
+
+    def clear_google_connection(self, profile_id: str) -> None:
+        normalized = self._normalize_profile_id(profile_id)
+        with self._connect() as connection:
+            connection.execute("DELETE FROM google_connections WHERE profile_id = ?", (normalized,))
+            connection.execute("DELETE FROM oauth_states WHERE provider = ? AND profile_id = ?", ("google", normalized))
+
+    def touch_google_sync(self, profile_id: str) -> GoogleConnection | None:
+        normalized = self._normalize_profile_id(profile_id)
+        now = datetime.utcnow().isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE google_connections SET last_synced_at = ?, updated_at = ? WHERE profile_id = ?",
+                (now, now, normalized),
+            )
+            row = connection.execute(
+                """
+                SELECT profile_id, email, access_token, refresh_token, scope, token_expiry, created_at, updated_at, last_synced_at
+                FROM google_connections
+                WHERE profile_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        return GoogleConnection.model_validate(dict(row)) if row else None
 
     def get_preferences(self, profile_id: str = DEFAULT_PROFILE_ID) -> UserPreferences:
         normalized = self._normalize_profile_id(profile_id)

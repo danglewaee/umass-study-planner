@@ -236,6 +236,42 @@
                 </div>
                 <div id="commitmentList" class="list"></div>
               </section>
+
+              <section class="module-card">
+                <div class="module-head">
+                  <div>
+                    <p class="eyebrow">Google Calendar</p>
+                    <h2>Import Repeating Events</h2>
+                    <p class="module-subtitle">
+                      Connect Google, choose a calendar, then import repeating timed events into fixed commitments.
+                    </p>
+                  </div>
+                </div>
+                <div id="googleConnectionStatus" class="integration-status muted-state">
+                  Google Calendar is not connected for this student profile yet.
+                </div>
+                <div class="toolbar">
+                  <button id="connectGoogleCalendar" class="secondary">Connect Google</button>
+                  <button id="refreshGoogleStatus" class="secondary">Refresh Status</button>
+                  <button id="disconnectGoogleCalendar" class="secondary">Disconnect</button>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Calendar
+                    <select id="googleCalendarSelect">
+                      <option value="primary">Primary Calendar</option>
+                    </select>
+                  </label>
+                  <label>
+                    Lookahead Days
+                    <input id="googleLookaheadDays" type="number" min="7" max="90" value="28" />
+                  </label>
+                </div>
+                <div class="toolbar">
+                  <button id="importGoogleCommitments" class="secondary">Import To Commitments</button>
+                </div>
+                <div id="googleImportSummary" class="list"></div>
+              </section>
             </aside>
           </section>
         </section>

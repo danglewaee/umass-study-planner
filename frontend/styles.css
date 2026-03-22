@@ -560,6 +560,28 @@ button.secondary {
   text-align: center;
 }
 
+.integration-status {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.integration-status.good {
+  border-color: rgba(36, 87, 62, 0.18);
+  background: var(--success-soft);
+}
+
+.integration-status.warning {
+  border-color: rgba(155, 91, 22, 0.18);
+  background: var(--warning-soft);
+}
+
+.integration-status.neutral {
+  border-color: rgba(47, 109, 138, 0.16);
+  background: #edf5f8;
+}
+
 .day-column {
   padding: 15px;
   border: 1px solid var(--line);

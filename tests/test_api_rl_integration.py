@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import sys
 import unittest
+from os import environ
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -13,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 import backend.app.main as app_module
 from backend.app.main import app
+from backend.app.google_calendar import GoogleTokenBundle
 from backend.app.models import TaskInput
 from backend.app.store import store
 
@@ -144,6 +147,99 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/commitments", headers=self.headers).json()), 1)
         self.assertEqual(self.client.get("/commitments", headers=other_profile_headers).json(), [])
         store.clear_profile(other_profile_headers["X-Profile-Id"])
+
+    def test_google_oauth_callback_persists_connection(self) -> None:
+        state = store.create_oauth_state("google", self.profile_id)
+
+        with patch.dict(
+            environ,
+            {
+                "GOOGLE_CLIENT_ID": "test-client",
+                "GOOGLE_CLIENT_SECRET": "test-secret",
+                "GOOGLE_REDIRECT_URI": "http://localhost:8000/oauth/google/callback",
+            },
+            clear=False,
+        ):
+            with patch(
+                "backend.app.main.google_calendar.exchange_code_for_tokens",
+                return_value=GoogleTokenBundle(
+                    access_token="google-access-token",
+                    refresh_token="google-refresh-token",
+                    scope="openid email https://www.googleapis.com/auth/calendar.readonly",
+                    expires_at=None,
+                ),
+            ), patch(
+                "backend.app.main.google_calendar.fetch_connected_email",
+                return_value="student@umass.edu",
+            ):
+                response = self.client.get(f"/oauth/google/callback?code=demo-code&state={state}")
+
+        self.assertEqual(response.status_code, 200)
+        connection = store.get_google_connection(self.profile_id)
+        self.assertIsNotNone(connection)
+        self.assertEqual(connection.email, "student@umass.edu")
+
+    def test_google_import_commitments_upserts_without_duplicates(self) -> None:
+        sample_events = [
+            {
+                "summary": "Algorithms lecture",
+                "location": "LGRC",
+                "start": {"dateTime": "2026-03-23T10:00:00-04:00"},
+                "end": {"dateTime": "2026-03-23T11:15:00-04:00"},
+                "recurringEventId": "algorithms-lecture",
+            },
+            {
+                "summary": "Algorithms lecture",
+                "location": "LGRC",
+                "start": {"dateTime": "2026-03-30T10:00:00-04:00"},
+                "end": {"dateTime": "2026-03-30T11:15:00-04:00"},
+                "recurringEventId": "algorithms-lecture",
+            },
+            {
+                "summary": "Career fair",
+                "location": "Campus Center",
+                "start": {"dateTime": "2026-03-25T15:00:00-04:00"},
+                "end": {"dateTime": "2026-03-25T16:00:00-04:00"},
+            },
+        ]
+
+        with patch.dict(
+            environ,
+            {
+                "GOOGLE_CLIENT_ID": "test-client",
+                "GOOGLE_CLIENT_SECRET": "test-secret",
+                "GOOGLE_REDIRECT_URI": "http://localhost:8000/oauth/google/callback",
+            },
+            clear=False,
+        ):
+            store.upsert_google_connection(
+                self.profile_id,
+                email="student@umass.edu",
+                access_token="google-access-token",
+                refresh_token="google-refresh-token",
+                scope="openid email https://www.googleapis.com/auth/calendar.readonly",
+                token_expiry=None,
+            )
+
+            with patch("backend.app.main.google_calendar.list_events", return_value=sample_events):
+                first = self.client.post(
+                    "/integrations/google/import-commitments",
+                    json={"calendar_id": "primary", "lookahead_days": 28},
+                    headers=self.headers,
+                )
+                second = self.client.post(
+                    "/integrations/google/import-commitments",
+                    json={"calendar_id": "primary", "lookahead_days": 28},
+                    headers=self.headers,
+                )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["imported_commitments"], 1)
+        self.assertEqual(second.json()["updated_commitments"], 1)
+        commitments = self.client.get("/commitments", headers=self.headers).json()
+        self.assertEqual(len(commitments), 1)
+        self.assertEqual(commitments[0]["title"], "Algorithms lecture")
 
 
 if __name__ == "__main__":

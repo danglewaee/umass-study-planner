@@ -8,6 +8,7 @@ const state = {
   profileId: byId("profileId").value,
   strategies: [],
   tasks: [],
+  googleCalendars: [],
   activeView: DEFAULT_VIEW,
 };
 
@@ -33,6 +34,13 @@ function formatLabel(value) {
 
 function formatTimeLabel(value) {
   return String(value).slice(0, 5);
+}
+
+function formatDateTimeLabel(value) {
+  if (!value) {
+    return "Not synced yet";
+  }
+  return new Date(value).toLocaleString();
 }
 
 function parseIsoDate(value) {
@@ -263,6 +271,76 @@ function renderCommitments(commitments) {
   );
 }
 
+function renderGoogleStatus(status) {
+  const container = byId("googleConnectionStatus");
+  const tone = !status.configured ? "warning" : status.connected ? "good" : "neutral";
+  container.className = `integration-status ${tone}`;
+
+  if (!status.configured) {
+    container.innerHTML = `
+      <strong>Google Calendar is not configured.</strong>
+      <div class="task-meta"><small>${escapeHtml(status.message || "Add Google OAuth env vars on the backend first.")}</small></div>
+    `;
+    renderGoogleCalendars([]);
+    return;
+  }
+
+  if (!status.connected) {
+    container.innerHTML = `
+      <strong>Google Calendar is ready to connect.</strong>
+      <div class="task-meta"><small>${escapeHtml(status.message || "Connect this student profile to Google Calendar.")}</small></div>
+    `;
+    renderGoogleCalendars([]);
+    return;
+  }
+
+  container.innerHTML = `
+    <strong>Connected as ${escapeHtml(status.connected_email || "Google user")}</strong>
+    <div class="task-meta"><small>Last sync: ${escapeHtml(formatDateTimeLabel(status.last_synced_at))}</small></div>
+  `;
+}
+
+function renderGoogleCalendars(calendars) {
+  state.googleCalendars = calendars;
+  const select = byId("googleCalendarSelect");
+  const previousValue = select.value;
+  select.innerHTML = "";
+
+  const items = calendars.length
+    ? calendars
+    : [{ id: "primary", summary: "Primary Calendar", primary: true }];
+
+  items.forEach((calendar) => {
+    const option = document.createElement("option");
+    option.value = calendar.id;
+    option.textContent = calendar.primary ? `${calendar.summary} (Primary)` : calendar.summary;
+    select.appendChild(option);
+  });
+
+  if (previousValue && items.some((calendar) => calendar.id === previousValue)) {
+    select.value = previousValue;
+  }
+}
+
+function renderGoogleImportSummary(summary) {
+  const rows = summary
+    ? [
+        `Calendar: ${summary.calendar_id}`,
+        `Imported commitments: ${summary.imported_commitments}`,
+        `Updated commitments: ${summary.updated_commitments}`,
+        `Skipped events: ${summary.skipped_events}`,
+        summary.message,
+        ...summary.imported_titles.map((title) => `Imported: ${title}`),
+      ]
+    : [];
+  renderList(
+    "googleImportSummary",
+    rows,
+    (row) => escapeHtml(row),
+    "No Google Calendar import has been run for this profile yet."
+  );
+}
+
 function renderScores(scores = {}) {
   const container = byId("scoreSummary");
   const entries = Object.entries(scores);
@@ -490,8 +568,17 @@ async function loadCommitments() {
   renderCommitments(commitments);
 }
 
+async function loadGoogleStatus() {
+  const status = await api("/integrations/google/status");
+  renderGoogleStatus(status);
+  if (status.configured && status.connected) {
+    const calendars = await api("/integrations/google/calendars");
+    renderGoogleCalendars(calendars);
+  }
+}
+
 async function loadProfileData() {
-  await Promise.all([loadTasks(), loadInsights(), loadCommitments(), loadPreferences()]);
+  await Promise.all([loadTasks(), loadInsights(), loadCommitments(), loadPreferences(), loadGoogleStatus()]);
 }
 
 async function parseBrainDump() {
@@ -593,6 +680,34 @@ async function deleteCommitment(commitmentId) {
   await loadCommitments();
 }
 
+async function connectGoogleCalendar() {
+  const payload = await api("/integrations/google/start");
+  const popup = window.open(payload.authorization_url, "_blank", "noopener,noreferrer");
+  if (!popup) {
+    window.location.href = payload.authorization_url;
+  }
+}
+
+async function disconnectGoogleCalendar() {
+  await api("/integrations/google/connection", { method: "DELETE" });
+  renderGoogleImportSummary(null);
+  await loadGoogleStatus();
+}
+
+async function importGoogleCommitments() {
+  const payload = {
+    calendar_id: byId("googleCalendarSelect").value || "primary",
+    lookahead_days: Number(byId("googleLookaheadDays").value || 28),
+  };
+  const summary = await api("/integrations/google/import-commitments", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  renderGoogleImportSummary(summary);
+  await Promise.all([loadCommitments(), loadGoogleStatus()]);
+  setActiveView("planner");
+}
+
 function bindRoutes() {
   document.querySelectorAll("[data-route-link]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -618,13 +733,23 @@ function bindEvents() {
   byId("generatePlan").addEventListener("click", () => generatePlan().catch(handleError));
   byId("generatePlanPrimary").addEventListener("click", () => generatePlan().catch(handleError));
   byId("addCommitment").addEventListener("click", () => addCommitment().catch(handleError));
+  byId("connectGoogleCalendar").addEventListener("click", () => connectGoogleCalendar().catch(handleError));
+  byId("refreshGoogleStatus").addEventListener("click", () => loadGoogleStatus().catch(handleError));
+  byId("disconnectGoogleCalendar").addEventListener("click", () => disconnectGoogleCalendar().catch(handleError));
+  byId("importGoogleCommitments").addEventListener("click", () => importGoogleCommitments().catch(handleError));
   byId("submitCheckin").addEventListener("click", () => submitCheckin().catch(handleError));
   byId("loadSeed").addEventListener("click", () => loadSeedPlan().catch(handleError));
   byId("replanStrategy").addEventListener("click", () => replanWithStrategy().catch(handleError));
   byId("replanRL").addEventListener("click", () => replanWithRL().catch(handleError));
   byId("trainSelector").addEventListener("click", () => trainSelector().catch(handleError));
-  byId("profileId").addEventListener("change", () => loadProfileData().catch(handleError));
-  byId("profileId").addEventListener("blur", () => loadProfileData().catch(handleError));
+  byId("profileId").addEventListener("change", () => {
+    renderGoogleImportSummary(null);
+    loadProfileData().catch(handleError);
+  });
+  byId("profileId").addEventListener("blur", () => {
+    renderGoogleImportSummary(null);
+    loadProfileData().catch(handleError);
+  });
   byId("commitmentList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-delete-commitment]");
     if (!button) {
@@ -647,6 +772,8 @@ async function init() {
   renderMetrics(null);
   renderParsedTasks([]);
   renderCommitments([]);
+  renderGoogleCalendars([]);
+  renderGoogleImportSummary(null);
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
     episodes: 0,
