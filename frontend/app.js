@@ -1,13 +1,12 @@
-﻿const byId = (id) => document.getElementById(id);
-const ROUTES = ["overview", "planner", "intake", "tasks", "repair", "insights"];
+const byId = (id) => document.getElementById(id);
 
-const apiBaseInput = byId("apiBase");
+const DEFAULT_VIEW = "overview";
 
 const state = {
-  apiBase: apiBaseInput.value,
+  apiBase: byId("apiBase").value,
   strategies: [],
   tasks: [],
-  route: "overview",
+  activeView: DEFAULT_VIEW,
 };
 
 function escapeHtml(value) {
@@ -30,81 +29,44 @@ function formatLabel(value) {
     .join(" ");
 }
 
-function getRoute() {
-  const route = window.location.hash.replace(/^#/, "") || "overview";
-  return ROUTES.includes(route) ? route : "overview";
+function parseIsoDate(value) {
+  const [year, month, day] = String(value).split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function navigateTo(route) {
-  const target = ROUTES.includes(route) ? route : "overview";
-  if (window.location.hash === `#${target}`) {
-    applyRoute(target);
-    return;
-  }
-  window.location.hash = target;
+function daysUntil(deadline) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = parseIsoDate(deadline);
+  target.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
 }
 
-function applyRoute(route = getRoute()) {
-  state.route = route;
+function requestedView() {
+  const view = window.location.hash.replace(/^#/, "").trim();
+  return view || DEFAULT_VIEW;
+}
 
-  document.querySelectorAll(".page-view").forEach((view) => {
-    view.classList.toggle("active", view.dataset.view === route);
+function setActiveView(viewName, syncHash = true) {
+  const views = Array.from(document.querySelectorAll("[data-view]")).map((element) => element.dataset.view);
+  const nextView = views.includes(viewName) ? viewName : DEFAULT_VIEW;
+  state.activeView = nextView;
+
+  document.querySelectorAll("[data-view]").forEach((section) => {
+    section.classList.toggle("active", section.dataset.view === nextView);
   });
 
   document.querySelectorAll("[data-route-link]").forEach((link) => {
-    const isActive = link.dataset.routeLink === route;
-    link.classList.toggle("active", isActive);
-    link.setAttribute("aria-current", isActive ? "page" : "false");
+    link.classList.toggle("active", link.dataset.routeLink === nextView);
   });
 
-  renderOverviewStats();
-  document.title = route === "overview" ? "UMass Study Partner" : `UMass Study Partner - ${formatLabel(route)}`;
-  window.scrollTo(0, 0);
-}
-
-function getApiCandidates() {
-  const host = window.location.hostname || "127.0.0.1";
-  return [...new Set(
-    [
-      apiBaseInput.value,
-      `http://${host}:8011`,
-      `http://${host}:8000`,
-      "http://127.0.0.1:8011",
-      "http://127.0.0.1:8000",
-    ]
-      .filter(Boolean)
-      .map((value) => value.replace(/\/$/, ""))
-  )];
-}
-
-async function canReachApi(baseUrl) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 1200);
-
-  try {
-    const response = await fetch(`${baseUrl}/planner/strategies`, { signal: controller.signal });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    window.clearTimeout(timeoutId);
+  if (syncHash) {
+    history.replaceState(null, "", `#${nextView}`);
   }
-}
-
-async function resolveApiBase() {
-  for (const candidate of getApiCandidates()) {
-    if (await canReachApi(candidate)) {
-      apiBaseInput.value = candidate;
-      state.apiBase = candidate;
-      return;
-    }
-  }
-
-  state.apiBase = apiBaseInput.value.trim().replace(/\/$/, "");
 }
 
 function api(path, options = {}) {
-  state.apiBase = (apiBaseInput.value.trim() || state.apiBase).replace(/\/$/, "");
+  state.apiBase = (byId("apiBase").value.trim() || state.apiBase).replace(/\/$/, "");
   return fetch(`${state.apiBase}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
@@ -151,17 +113,43 @@ function renderList(containerId, items, render, emptyMessage = "Nothing to show 
   });
 }
 
+function renderTaskStats(tasks) {
+  const stats = [
+    ["Total Tasks", tasks.length],
+    ["Pending", tasks.filter((task) => task.status === "pending").length],
+    ["Delayed", tasks.filter((task) => task.status === "delayed").length],
+    ["Completed", tasks.filter((task) => task.status === "completed").length],
+    [
+      "Due Soon",
+      tasks.filter((task) => task.status !== "completed" && daysUntil(task.deadline) <= 2).length,
+    ],
+  ];
+
+  byId("taskStats").innerHTML = stats
+    .map(
+      ([label, value]) => `
+        <div class="stat-card">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </div>
+      `
+    )
+    .join("");
+}
+
 function populateStrategySelects(strategies) {
   const selects = [byId("strategySelect"), byId("repairStrategy")];
   selects.forEach((select) => {
     const previousValue = select.value;
     select.innerHTML = "";
+
     strategies.forEach((strategy) => {
       const option = document.createElement("option");
       option.value = strategy;
       option.textContent = formatLabel(strategy);
       select.appendChild(option);
     });
+
     if (previousValue && strategies.includes(previousValue)) {
       select.value = previousValue;
     }
@@ -196,68 +184,10 @@ function populateRepairTasks(tasks) {
   }
 }
 
-function renderTaskStats(tasks) {
-  const container = byId("taskStats");
-  const counts = {
-    total: tasks.length,
-    pending: tasks.filter((task) => task.status === "pending").length,
-    scheduled: tasks.filter((task) => task.status === "scheduled").length,
-    delayed: tasks.filter((task) => task.status === "delayed").length,
-    completed: tasks.filter((task) => task.status === "completed").length,
-  };
-
-  const cards = [
-    ["Total Tasks", counts.total],
-    ["Pending", counts.pending],
-    ["Scheduled", counts.scheduled],
-    ["Delayed", counts.delayed],
-    ["Completed", counts.completed],
-  ];
-
-  container.innerHTML = cards
-    .map(
-      ([label, value]) => `
-        <article class="stat-card">
-          <span>${escapeHtml(label)}</span>
-          <strong>${escapeHtml(value)}</strong>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderOverviewStats() {
-  const container = byId("overviewStats");
-  if (!container) {
-    return;
-  }
-
-  const delayedCount = state.tasks.filter((task) => task.status === "delayed").length;
-  const activeCount = state.tasks.filter((task) => task.status !== "completed").length;
-  const stats = [
-    ["Active Tasks", activeCount],
-    ["Delayed", delayedCount],
-    ["Strategies", state.strategies.length || "-"],
-    ["Current View", formatLabel(state.route)],
-  ];
-
-  container.innerHTML = stats
-    .map(
-      ([label, value]) => `
-        <article class="overview-stat">
-          <span>${escapeHtml(label)}</span>
-          <strong>${escapeHtml(value)}</strong>
-        </article>
-      `
-    )
-    .join("");
-}
-
 function renderTasks(tasks) {
   state.tasks = tasks;
   populateRepairTasks(tasks);
   renderTaskStats(tasks);
-  renderOverviewStats();
   renderList(
     "taskList",
     tasks,
@@ -266,7 +196,7 @@ function renderTasks(tasks) {
         <div>
           <strong>${escapeHtml(task.title)}</strong>
           <div class="task-meta">
-            <small>${escapeHtml(formatLabel(task.category))} | due ${escapeHtml(task.deadline)} | ${escapeHtml(task.estimated_minutes)} min</small>
+            <small>${escapeHtml(formatLabel(task.category))} &middot; due ${escapeHtml(task.deadline)} &middot; ${escapeHtml(task.estimated_minutes)} min</small>
           </div>
         </div>
         <span class="status-pill ${escapeHtml(task.status)}">${escapeHtml(formatLabel(task.status))}</span>
@@ -283,7 +213,7 @@ function renderParsedTasks(tasks) {
     (task) => `
       <strong>${escapeHtml(task.title)}</strong>
       <div class="task-meta">
-        <small>${escapeHtml(formatLabel(task.category))} | due ${escapeHtml(task.deadline)} | ${escapeHtml(task.estimated_minutes)} min</small>
+        <small>${escapeHtml(formatLabel(task.category))} &middot; due ${escapeHtml(task.deadline)} &middot; ${escapeHtml(task.estimated_minutes)} min</small>
       </div>
     `,
     "Parse a brain dump to preview structured tasks."
@@ -403,16 +333,16 @@ function renderRepairSummary(payload, mode) {
   const rows = [];
   const plan = mode === "rl" ? payload.result : payload;
 
-  if (mode === "rl") {
+  if (mode === "rl" && payload.chosen_strategy && payload.encoded_state) {
     rows.push(`Learned selector chose: ${formatLabel(payload.chosen_strategy)}`);
     rows.push(`Encoded repair state: ${payload.encoded_state.join(" / ")}`);
   }
 
-  if (plan.strategy_used) {
+  if (plan && plan.strategy_used) {
     rows.push(`Plan strategy used: ${formatLabel(plan.strategy_used)}`);
   }
 
-  if (plan.metrics) {
+  if (plan && plan.metrics) {
     rows.push(`Scheduled tasks: ${plan.metrics.scheduled_tasks}`);
     rows.push(`Preserved blocks: ${plan.metrics.preserved_blocks}`);
     rows.push(`Overload days: ${plan.metrics.overload_days}`);
@@ -428,7 +358,7 @@ function renderSelectorSummary(summary) {
     `Unique states: ${summary.unique_states}`,
     `Average reward: ${summary.average_reward}`,
     `Final epsilon: ${summary.final_epsilon}`,
-    ...Object.entries(summary.action_counts).map(
+    ...Object.entries(summary.action_counts || {}).map(
       ([strategy, count]) => `${formatLabel(strategy)} selected ${count} times during training`
     ),
   ];
@@ -488,7 +418,6 @@ async function loadStrategies() {
   const payload = await api("/planner/strategies");
   state.strategies = payload.strategies || [];
   populateStrategySelects(state.strategies);
-  renderOverviewStats();
 }
 
 async function parseBrainDump() {
@@ -499,7 +428,7 @@ async function parseBrainDump() {
     body: JSON.stringify({ text }),
   });
   renderParsedTasks(parsed.tasks);
-  navigateTo("intake");
+  setActiveView("intake");
 }
 
 async function generatePlan() {
@@ -513,8 +442,7 @@ async function generatePlan() {
     body: JSON.stringify(payload),
   });
   renderPlan(plan, `Generated with ${formatLabel(plan.strategy_used)}`, "good");
-  navigateTo("planner");
-  return plan;
+  setActiveView("planner");
 }
 
 async function replanWithStrategy() {
@@ -525,7 +453,7 @@ async function replanWithStrategy() {
   renderPlan(plan, `Replanned with ${formatLabel(plan.strategy_used)}`, "warning");
   renderRepairSummary(plan, "strategy");
   await loadTasks();
-  navigateTo("repair");
+  setActiveView("repair");
 }
 
 async function replanWithRL() {
@@ -537,7 +465,7 @@ async function replanWithRL() {
   renderPlan(result.result, `RL selected ${formatLabel(result.chosen_strategy)}`, "accent");
   renderRepairSummary(result, "rl");
   await loadTasks();
-  navigateTo("repair");
+  setActiveView("repair");
 }
 
 async function trainSelector() {
@@ -550,7 +478,7 @@ async function trainSelector() {
     body: JSON.stringify(payload),
   });
   renderSelectorSummary(summary);
-  navigateTo("repair");
+  setActiveView("repair");
 }
 
 async function submitCheckin() {
@@ -565,28 +493,33 @@ async function submitCheckin() {
     body: JSON.stringify(payload),
   });
   renderInsights(insights);
-  navigateTo("insights");
+  setActiveView("insights");
 }
 
 async function loadSeedPlan() {
   const plan = await api("/demo/seed-plan");
   renderPlan(plan, "Loaded demo seed plan", "neutral");
-  navigateTo("planner");
+  await loadTasks();
+  setActiveView("planner");
 }
 
 function bindRoutes() {
   document.querySelectorAll("[data-route-link]").forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      navigateTo(link.dataset.routeLink);
+      setActiveView(link.dataset.routeLink);
     });
   });
 
   document.querySelectorAll("[data-route-target]").forEach((button) => {
-    button.addEventListener("click", () => navigateTo(button.dataset.routeTarget));
+    button.addEventListener("click", () => {
+      setActiveView(button.dataset.routeTarget);
+    });
   });
 
-  window.addEventListener("hashchange", () => applyRoute());
+  window.addEventListener("hashchange", () => {
+    setActiveView(requestedView(), false);
+  });
 }
 
 function bindEvents() {
@@ -609,11 +542,9 @@ function handleError(error) {
 async function init() {
   setWeekStartDefault();
   bindEvents();
-  await resolveApiBase();
+  setActiveView(requestedView(), false);
   renderScores();
   renderMetrics(null);
-  renderTaskStats([]);
-  renderOverviewStats();
   renderParsedTasks([]);
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
@@ -623,7 +554,6 @@ async function init() {
     final_epsilon: 0,
     action_counts: {},
   });
-  applyRoute();
   await Promise.all([loadTasks(), loadInsights(), loadStrategies()]).catch(handleError);
 }
 
