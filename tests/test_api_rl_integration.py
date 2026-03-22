@@ -20,12 +20,14 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.client = TestClient(app)
         self.original_tasks = [task.model_copy(deep=True) for task in store.state.tasks]
         self.original_check_ins = [check_in.model_copy(deep=True) for check_in in store.state.check_ins]
+        self.original_commitments = [commitment.model_copy(deep=True) for commitment in store.state.commitments]
         self.original_preferences = store.state.preferences.model_copy(deep=True)
         self.original_selector = app_module.trained_selector
 
     def tearDown(self) -> None:
         store.state.tasks = [task.model_copy(deep=True) for task in self.original_tasks]
         store.state.check_ins = [check_in.model_copy(deep=True) for check_in in self.original_check_ins]
+        store.state.commitments = [commitment.model_copy(deep=True) for commitment in self.original_commitments]
         store.state.preferences = self.original_preferences.model_copy(deep=True)
         app_module.trained_selector = self.original_selector
 
@@ -82,6 +84,32 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertIn("result", payload)
         self.assertIn("strategy_used", payload["result"])
         self.assertIsNotNone(payload["result"]["metrics"])
+
+    def test_commitment_endpoints_round_trip(self) -> None:
+        create_response = self.client.post(
+            "/commitments",
+            json={
+                "title": "Operating systems lecture",
+                "day_of_week": 1,
+                "start": "10:00:00",
+                "end": "11:15:00",
+                "kind": "class",
+                "location": "Hasbrouck",
+                "notes": "Recurring lecture block.",
+            },
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created = create_response.json()
+
+        list_response = self.client.get("/commitments")
+        self.assertEqual(list_response.status_code, 200)
+        payload = list_response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["title"], "Operating systems lecture")
+
+        delete_response = self.client.delete(f"/commitments/{created['id']}")
+        self.assertEqual(delete_response.status_code, 204)
+        self.assertEqual(self.client.get("/commitments").json(), [])
 
 
 if __name__ == "__main__":

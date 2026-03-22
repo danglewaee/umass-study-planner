@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta
 from uuid import uuid4
 
 from .models import (
+    FixedCommitment,
     PlanMetrics,
     PlanStrategy,
     ScheduleBlock,
@@ -110,12 +111,107 @@ def _create_sleep_blocks(days: list[date], preferences: UserPreferences) -> list
     return blocks
 
 
+def _create_fixed_commitment_blocks(week_start: date, commitments: list[FixedCommitment]) -> list[ScheduleBlock]:
+    blocks: list[ScheduleBlock] = []
+    for commitment in commitments:
+        assigned_day = week_start + timedelta(days=commitment.day_of_week)
+        location_suffix = f" at {commitment.location}" if commitment.location else ""
+        notes_suffix = f" Notes: {commitment.notes}" if commitment.notes else ""
+        blocks.append(
+            ScheduleBlock(
+                id=str(uuid4()),
+                title=commitment.title,
+                day=assigned_day,
+                start=commitment.start,
+                end=commitment.end,
+                kind="commitment",
+                reasoning=f"Fixed {commitment.kind.value} commitment{location_suffix}.{notes_suffix}".strip(),
+            )
+        )
+    return blocks
+
+
+def _add_occupied_interval(intervals: list[tuple[time, time]], start: time, end: time) -> None:
+    intervals.append((start, end))
+    intervals.sort(key=lambda item: item[0])
+
+
+def _intervals_overlap(left_start: time, left_end: time, right_start: time, right_end: time) -> bool:
+    return left_start < right_end and right_start < left_end
+
+
+def _build_occupied_schedule(days: list[date], blocks: list[ScheduleBlock]) -> dict[date, list[tuple[time, time]]]:
+    occupied = {day: [] for day in days}
+    for block in blocks:
+        if block.day in occupied:
+            _add_occupied_interval(occupied[block.day], block.start, block.end)
+    return occupied
+
+
+def _can_place_task(
+    occupied_intervals: list[tuple[time, time]],
+    start: time,
+    duration_minutes: int,
+    break_minutes: int,
+    latest_focus_end: time,
+) -> bool:
+    end = _add_minutes(start, duration_minutes)
+    if end > latest_focus_end:
+        return False
+    if any(_intervals_overlap(start, end, current_start, current_end) for current_start, current_end in occupied_intervals):
+        return False
+
+    break_end = _add_minutes(end, break_minutes)
+    if any(_intervals_overlap(end, break_end, current_start, current_end) for current_start, current_end in occupied_intervals):
+        return False
+    return True
+
+
+def _find_candidate_start(
+    occupied_intervals: list[tuple[time, time]],
+    earliest_start: time,
+    duration_minutes: int,
+    break_minutes: int,
+    latest_focus_end: time,
+) -> time | None:
+    candidate = earliest_start
+    for interval_start, interval_end in sorted(occupied_intervals, key=lambda item: item[0]):
+        if interval_end <= candidate:
+            continue
+        if candidate < interval_start and _can_place_task(
+            occupied_intervals,
+            candidate,
+            duration_minutes,
+            break_minutes,
+            latest_focus_end,
+        ):
+            return candidate
+        candidate = max_time(candidate, interval_end)
+
+    if _can_place_task(occupied_intervals, candidate, duration_minutes, break_minutes, latest_focus_end):
+        return candidate
+    return None
+
+
+def _occupy_task_and_break(
+    occupied_schedule: dict[date, list[tuple[time, time]]],
+    assigned_day: date,
+    start: time,
+    duration_minutes: int,
+    break_minutes: int,
+) -> None:
+    end = _add_minutes(start, duration_minutes)
+    _add_occupied_interval(occupied_schedule[assigned_day], start, end)
+    _add_occupied_interval(occupied_schedule[assigned_day], end, _add_minutes(end, break_minutes))
+
+
 def generate_weekly_plan(
     tasks: list[Task],
     week_start: date,
     preferences: UserPreferences,
     strategy: PlanStrategy = PlanStrategy.stability_aware,
     previous_plan: WeeklyPlanResponse | None = None,
+    commitments: list[FixedCommitment] | None = None,
 ) -> WeeklyPlanResponse:
     profile = get_strategy_profile(strategy)
     days = _weekday_offsets(week_start)
@@ -127,9 +223,10 @@ def generate_weekly_plan(
     blocks: list[ScheduleBlock] = []
     alerts: list[str] = []
     blocks.extend(_create_sleep_blocks(days, preferences))
+    blocks.extend(_create_fixed_commitment_blocks(week_start, commitments or []))
 
     daily_loads = {day: 0 for day in days}
-    day_next_start = {day: preferences.focus_start for day in days}
+    occupied_schedule = _build_occupied_schedule(days, blocks)
     task_lookup = {task.id: task for task in tasks}
     previous_task_blocks = {
         block.task_id: block
@@ -155,12 +252,20 @@ def generate_weekly_plan(
                 continue
             if daily_loads[block.day] + duration_minutes > daily_limit_minutes + profile.soft_capacity_overflow_minutes:
                 continue
+            if not _can_place_task(
+                occupied_schedule[block.day],
+                block.start,
+                duration_minutes,
+                break_minutes,
+                latest_focus_end,
+            ):
+                continue
 
             _append_task_block(blocks, task, block.day, block.start, duration_minutes, break_minutes, preserved=True)
             scheduled_task_ids.add(task.id)
             preserved_blocks += 1
             daily_loads[block.day] += duration_minutes
-            day_next_start[block.day] = max_time(day_next_start[block.day], _add_minutes(block.end, break_minutes))
+            _occupy_task_and_break(occupied_schedule, block.day, block.start, duration_minutes, break_minutes)
             if block.end > preferences.focus_end:
                 off_window_blocks += 1
 
@@ -178,21 +283,24 @@ def generate_weekly_plan(
         for assigned_day in candidate_day_order:
             if assigned_day > min(task.deadline, week_end):
                 continue
-            proposed_start = day_next_start[assigned_day]
-            proposed_end = _add_minutes(proposed_start, duration_minutes)
             overflow_limit = daily_limit_minutes + profile.soft_capacity_overflow_minutes
-            if proposed_start < preferences.focus_start:
-                proposed_start = preferences.focus_start
-                proposed_end = _add_minutes(proposed_start, duration_minutes)
-            if proposed_end > latest_focus_end:
-                continue
             if daily_loads[assigned_day] + duration_minutes > overflow_limit:
                 continue
+            proposed_start = _find_candidate_start(
+                occupied_schedule[assigned_day],
+                preferences.focus_start,
+                duration_minutes,
+                break_minutes,
+                latest_focus_end,
+            )
+            if proposed_start is None:
+                continue
+            proposed_end = _add_minutes(proposed_start, duration_minutes)
 
             _append_task_block(blocks, task, assigned_day, proposed_start, duration_minutes, break_minutes, preserved=False)
             scheduled_task_ids.add(task.id)
             daily_loads[assigned_day] += duration_minutes
-            day_next_start[assigned_day] = _add_minutes(proposed_end, break_minutes)
+            _occupy_task_and_break(occupied_schedule, assigned_day, proposed_start, duration_minutes, break_minutes)
             if proposed_end > preferences.focus_end:
                 off_window_blocks += 1
             assigned = True

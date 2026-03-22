@@ -12,6 +12,7 @@ The current build combines a stronger product-facing dashboard with the repo's s
 
 ## What the current build does
 - Parses brain-dump text into candidate tasks
+- Stores recurring fixed commitments such as classes, work shifts, clubs, and commute blocks
 - Generates weekly plans with one of four planner strategies:
   - `stability_aware`
   - `deadline_rescue`

@@ -173,6 +173,63 @@
                   </label>
                 </div>
               </section>
+
+              <section class="module-card">
+                <div class="module-head">
+                  <div>
+                    <p class="eyebrow">Fixed Commitments</p>
+                    <h2>Weekly Schedule Blocks</h2>
+                    <p class="module-subtitle">
+                      Add recurring classes, work shifts, clubs, and other blocks the planner should never override.
+                    </p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Title
+                    <input id="commitmentTitle" placeholder="Intro to Algorithms lecture" />
+                  </label>
+                  <label>
+                    Type
+                    <select id="commitmentKind">
+                      <option value="class">Class</option>
+                      <option value="work">Work</option>
+                      <option value="club">Club</option>
+                      <option value="commute">Commute</option>
+                      <option value="personal">Personal</option>
+                      <option value="health">Health</option>
+                    </select>
+                  </label>
+                  <label>
+                    Day
+                    <select id="commitmentDay">
+                      <option value="0">Monday</option>
+                      <option value="1">Tuesday</option>
+                      <option value="2">Wednesday</option>
+                      <option value="3">Thursday</option>
+                      <option value="4">Friday</option>
+                      <option value="5">Saturday</option>
+                      <option value="6">Sunday</option>
+                    </select>
+                  </label>
+                  <label>
+                    Start
+                    <input id="commitmentStart" type="time" value="10:00" />
+                  </label>
+                  <label>
+                    End
+                    <input id="commitmentEnd" type="time" value="11:15" />
+                  </label>
+                  <label>
+                    Location
+                    <input id="commitmentLocation" placeholder="LGRC / library / campus job" />
+                  </label>
+                </div>
+                <div class="toolbar">
+                  <button id="addCommitment" class="secondary">Add Commitment</button>
+                </div>
+                <div id="commitmentList" class="list"></div>
+              </section>
             </aside>
           </section>
         </section>

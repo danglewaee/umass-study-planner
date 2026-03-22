@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TaskCategory(str, Enum):
@@ -26,6 +26,15 @@ class PlanStrategy(str, Enum):
     deadline_rescue = "deadline_rescue"
     load_balance = "load_balance"
     focus_windows = "focus_windows"
+
+
+class CommitmentKind(str, Enum):
+    class_session = "class"
+    work = "work"
+    club = "club"
+    commute = "commute"
+    personal = "personal"
+    health = "health"
 
 
 class UserPreferences(BaseModel):
@@ -62,6 +71,27 @@ class BrainDumpResponse(BaseModel):
     tasks: list[TaskInput]
 
 
+class FixedCommitmentInput(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    day_of_week: int = Field(ge=0, le=6, description="Monday=0")
+    start: time
+    end: time
+    kind: CommitmentKind = CommitmentKind.class_session
+    location: str = Field(default="", max_length=120)
+    notes: str = Field(default="", max_length=240)
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "FixedCommitmentInput":
+        if self.end <= self.start:
+            raise ValueError("Commitment end must be after start.")
+        return self
+
+
+class FixedCommitment(FixedCommitmentInput):
+    id: str
+    created_at: datetime
+
+
 class ScheduleBlock(BaseModel):
     id: str
     title: str
@@ -69,7 +99,7 @@ class ScheduleBlock(BaseModel):
     day: date
     start: time
     end: time
-    kind: Literal["deep_work", "break", "sleep", "buffer", "class", "recovery"]
+    kind: Literal["deep_work", "break", "sleep", "buffer", "class", "recovery", "commitment"]
     reasoning: str
 
 

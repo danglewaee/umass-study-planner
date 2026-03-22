@@ -468,6 +468,11 @@ button.secondary {
   box-shadow: none;
 }
 
+.compact-button {
+  min-height: 34px;
+  padding: 6px 11px;
+}
+
 .alert-stack,
 .list {
   display: grid;
@@ -578,6 +583,12 @@ button.secondary {
 .block.sleep {
   border-left-color: var(--warning);
   background: var(--warning-soft);
+}
+
+.block.commitment,
+.block.class {
+  border-left-color: #2f6d8a;
+  background: #e2f0f6;
 }
 
 .task-row {

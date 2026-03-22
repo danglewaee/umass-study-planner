@@ -5,19 +5,20 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
-from .models import CheckIn, CheckInInput, Task, TaskInput, UserPreferences
+from .models import CheckIn, CheckInInput, FixedCommitment, FixedCommitmentInput, Task, TaskInput, UserPreferences
 
 
 @dataclass
 class AppState:
     tasks: list[Task]
     check_ins: list[CheckIn]
+    commitments: list[FixedCommitment]
     preferences: UserPreferences
 
 
 class InMemoryStore:
     def __init__(self) -> None:
-        self.state = AppState(tasks=[], check_ins=[], preferences=UserPreferences())
+        self.state = AppState(tasks=[], check_ins=[], commitments=[], preferences=UserPreferences())
         self._seed_data()
 
     def _seed_data(self) -> None:
@@ -84,6 +85,25 @@ class InMemoryStore:
 
     def list_check_ins(self) -> list[CheckIn]:
         return list(self.state.check_ins)
+
+    def add_commitment(self, payload: FixedCommitmentInput) -> FixedCommitment:
+        commitment = FixedCommitment(
+            id=str(uuid4()),
+            created_at=datetime.utcnow(),
+            **payload.model_dump(),
+        )
+        self.state.commitments.append(commitment)
+        return commitment
+
+    def list_commitments(self) -> list[FixedCommitment]:
+        return sorted(self.state.commitments, key=lambda item: (item.day_of_week, item.start, item.title))
+
+    def delete_commitment(self, commitment_id: str) -> bool:
+        for index, commitment in enumerate(self.state.commitments):
+            if commitment.id == commitment_id:
+                del self.state.commitments[index]
+                return True
+        return False
 
     def get_preferences(self) -> UserPreferences:
         return self.state.preferences

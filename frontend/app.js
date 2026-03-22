@@ -1,6 +1,7 @@
 const byId = (id) => document.getElementById(id);
 
 const DEFAULT_VIEW = "overview";
+const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 const state = {
   apiBase: byId("apiBase").value,
@@ -27,6 +28,10 @@ function formatLabel(value) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function formatTimeLabel(value) {
+  return String(value).slice(0, 5);
 }
 
 function parseIsoDate(value) {
@@ -74,6 +79,9 @@ function api(path, options = {}) {
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || `Request failed: ${response.status}`);
+    }
+    if (response.status === 204) {
+      return null;
     }
     return response.json();
   });
@@ -217,6 +225,26 @@ function renderParsedTasks(tasks) {
       </div>
     `,
     "Parse a brain dump to preview structured tasks."
+  );
+}
+
+function renderCommitments(commitments) {
+  renderList(
+    "commitmentList",
+    commitments,
+    (commitment) => `
+      <div class="task-row">
+        <div>
+          <strong>${escapeHtml(commitment.title)}</strong>
+          <div class="task-meta">
+            <small>${escapeHtml(DAY_LABELS[commitment.day_of_week])} &middot; ${escapeHtml(formatTimeLabel(commitment.start))}-${escapeHtml(formatTimeLabel(commitment.end))} &middot; ${escapeHtml(formatLabel(commitment.kind))}</small>
+          </div>
+          ${commitment.location ? `<div class="task-meta"><small>${escapeHtml(commitment.location)}</small></div>` : ""}
+        </div>
+        <button type="button" class="secondary compact-button" data-delete-commitment="${escapeHtml(commitment.id)}">Remove</button>
+      </div>
+    `,
+    "No fixed commitments yet. Add classes or recurring weekly obligations here."
   );
 }
 
@@ -404,6 +432,23 @@ function collectRepairPayload(includeStrategy = true) {
   return payload;
 }
 
+function collectCommitmentPayload() {
+  const title = byId("commitmentTitle").value.trim();
+  if (!title) {
+    throw new Error("Commitment title is required.");
+  }
+
+  return {
+    title,
+    kind: byId("commitmentKind").value,
+    day_of_week: Number(byId("commitmentDay").value),
+    start: `${byId("commitmentStart").value || "10:00"}:00`,
+    end: `${byId("commitmentEnd").value || "11:15"}:00`,
+    location: byId("commitmentLocation").value.trim(),
+    notes: "",
+  };
+}
+
 async function loadTasks() {
   const tasks = await api("/tasks");
   renderTasks(tasks);
@@ -418,6 +463,11 @@ async function loadStrategies() {
   const payload = await api("/planner/strategies");
   state.strategies = payload.strategies || [];
   populateStrategySelects(state.strategies);
+}
+
+async function loadCommitments() {
+  const commitments = await api("/commitments");
+  renderCommitments(commitments);
 }
 
 async function parseBrainDump() {
@@ -503,6 +553,22 @@ async function loadSeedPlan() {
   setActiveView("planner");
 }
 
+async function addCommitment() {
+  await api("/commitments", {
+    method: "POST",
+    body: JSON.stringify(collectCommitmentPayload()),
+  });
+  byId("commitmentTitle").value = "";
+  byId("commitmentLocation").value = "";
+  await loadCommitments();
+  setActiveView("planner");
+}
+
+async function deleteCommitment(commitmentId) {
+  await api(`/commitments/${commitmentId}`, { method: "DELETE" });
+  await loadCommitments();
+}
+
 function bindRoutes() {
   document.querySelectorAll("[data-route-link]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -527,11 +593,19 @@ function bindEvents() {
   byId("parseDump").addEventListener("click", () => parseBrainDump().catch(handleError));
   byId("generatePlan").addEventListener("click", () => generatePlan().catch(handleError));
   byId("generatePlanPrimary").addEventListener("click", () => generatePlan().catch(handleError));
+  byId("addCommitment").addEventListener("click", () => addCommitment().catch(handleError));
   byId("submitCheckin").addEventListener("click", () => submitCheckin().catch(handleError));
   byId("loadSeed").addEventListener("click", () => loadSeedPlan().catch(handleError));
   byId("replanStrategy").addEventListener("click", () => replanWithStrategy().catch(handleError));
   byId("replanRL").addEventListener("click", () => replanWithRL().catch(handleError));
   byId("trainSelector").addEventListener("click", () => trainSelector().catch(handleError));
+  byId("commitmentList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-commitment]");
+    if (!button) {
+      return;
+    }
+    deleteCommitment(button.dataset.deleteCommitment).catch(handleError);
+  });
 }
 
 function handleError(error) {
@@ -546,6 +620,7 @@ async function init() {
   renderScores();
   renderMetrics(null);
   renderParsedTasks([]);
+  renderCommitments([]);
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
     episodes: 0,
@@ -554,7 +629,7 @@ async function init() {
     final_epsilon: 0,
     action_counts: {},
   });
-  await Promise.all([loadTasks(), loadInsights(), loadStrategies()]).catch(handleError);
+  await Promise.all([loadTasks(), loadInsights(), loadStrategies(), loadCommitments()]).catch(handleError);
 }
 
 init();

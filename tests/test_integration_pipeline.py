@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from backend.app.models import PlanStrategy, Task, TaskCategory, TaskStatus, UserPreferences
+from backend.app.models import CommitmentKind, FixedCommitment, PlanStrategy, Task, TaskCategory, TaskStatus, UserPreferences
 from backend.app.planner import generate_weekly_plan
 from ml.repair_selector import evaluate_repair_selector, train_repair_selector
 
@@ -82,6 +82,33 @@ class IntegrationPipelineTests(unittest.TestCase):
         self.assertIn("fixed_policies", results)
         self.assertIn("deadline_rescue", results["fixed_policies"])
         self.assertIn("reward", results["learned_policy"])
+
+    def test_generate_plan_respects_fixed_commitments(self) -> None:
+        commitment = FixedCommitment(
+            id="c1",
+            title="Algorithms lecture",
+            day_of_week=0,
+            start=time(hour=9, minute=0),
+            end=time(hour=10, minute=30),
+            kind=CommitmentKind.class_session,
+            location="LGRC",
+            notes="",
+            created_at=datetime.utcnow(),
+        )
+        plan = generate_weekly_plan(
+            [build_task("t5", "Problem set", 0, 90, 5, 4)],
+            self.week_start,
+            self.preferences,
+            strategy=PlanStrategy.stability_aware,
+            commitments=[commitment],
+        )
+
+        commitment_blocks = [block for block in plan.blocks if block.kind == "commitment"]
+        deep_work_blocks = [block for block in plan.blocks if block.kind == "deep_work"]
+
+        self.assertEqual(len(commitment_blocks), 1)
+        self.assertTrue(deep_work_blocks)
+        self.assertGreaterEqual(deep_work_blocks[0].start, time(hour=10, minute=30))
 
 
 if __name__ == "__main__":
