@@ -5,6 +5,7 @@ const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Sat
 
 const state = {
   apiBase: byId("apiBase").value,
+  profileId: byId("profileId").value,
   strategies: [],
   tasks: [],
   activeView: DEFAULT_VIEW,
@@ -72,8 +73,12 @@ function setActiveView(viewName, syncHash = true) {
 
 function api(path, options = {}) {
   state.apiBase = (byId("apiBase").value.trim() || state.apiBase).replace(/\/$/, "");
+  state.profileId = (byId("profileId").value.trim() || state.profileId || "demo-user");
   return fetch(`${state.apiBase}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Profile-Id": state.profileId,
+    },
     ...options,
   }).then(async (response) => {
     if (!response.ok) {
@@ -85,6 +90,16 @@ function api(path, options = {}) {
     }
     return response.json();
   });
+}
+
+function renderPreferences(preferences) {
+  byId("sleepStart").value = formatTimeLabel(preferences.sleep_start);
+  byId("sleepEnd").value = formatTimeLabel(preferences.sleep_end);
+  byId("focusStart").value = formatTimeLabel(preferences.focus_start);
+  byId("focusEnd").value = formatTimeLabel(preferences.focus_end);
+  byId("breakMinutes").value = preferences.break_minutes;
+  byId("maxDeepBlocks").value = preferences.max_deep_blocks_per_day;
+  byId("blockMinutes").value = preferences.preferred_block_minutes;
 }
 
 function setWeekStartDefault() {
@@ -465,9 +480,18 @@ async function loadStrategies() {
   populateStrategySelects(state.strategies);
 }
 
+async function loadPreferences() {
+  const preferences = await api("/preferences");
+  renderPreferences(preferences);
+}
+
 async function loadCommitments() {
   const commitments = await api("/commitments");
   renderCommitments(commitments);
+}
+
+async function loadProfileData() {
+  await Promise.all([loadTasks(), loadInsights(), loadCommitments(), loadPreferences()]);
 }
 
 async function parseBrainDump() {
@@ -599,6 +623,8 @@ function bindEvents() {
   byId("replanStrategy").addEventListener("click", () => replanWithStrategy().catch(handleError));
   byId("replanRL").addEventListener("click", () => replanWithRL().catch(handleError));
   byId("trainSelector").addEventListener("click", () => trainSelector().catch(handleError));
+  byId("profileId").addEventListener("change", () => loadProfileData().catch(handleError));
+  byId("profileId").addEventListener("blur", () => loadProfileData().catch(handleError));
   byId("commitmentList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-delete-commitment]");
     if (!button) {
@@ -629,7 +655,7 @@ async function init() {
     final_epsilon: 0,
     action_counts: {},
   });
-  await Promise.all([loadTasks(), loadInsights(), loadStrategies(), loadCommitments()]).catch(handleError);
+  await Promise.all([loadStrategies(), loadProfileData()]).catch(handleError);
 }
 
 init();

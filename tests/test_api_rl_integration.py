@@ -4,6 +4,7 @@ import sys
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -12,27 +13,36 @@ sys.path.insert(0, str(ROOT))
 
 import backend.app.main as app_module
 from backend.app.main import app
+from backend.app.models import TaskInput
 from backend.app.store import store
 
 
 class ApiRepairSelectorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
-        self.original_tasks = [task.model_copy(deep=True) for task in store.state.tasks]
-        self.original_check_ins = [check_in.model_copy(deep=True) for check_in in store.state.check_ins]
-        self.original_commitments = [commitment.model_copy(deep=True) for commitment in store.state.commitments]
-        self.original_preferences = store.state.preferences.model_copy(deep=True)
+        self.profile_id = f"test-api-{uuid4().hex}"
+        self.headers = {"X-Profile-Id": self.profile_id}
         self.original_selector = app_module.trained_selector
+        store.clear_profile(self.profile_id)
+        store.add_task(
+            TaskInput(
+                title="Test task",
+                description="Task for API test profile.",
+                category="academics",
+                deadline=date.today(),
+                estimated_minutes=90,
+                difficulty=4,
+                priority=5,
+            ),
+            self.profile_id,
+        )
 
     def tearDown(self) -> None:
-        store.state.tasks = [task.model_copy(deep=True) for task in self.original_tasks]
-        store.state.check_ins = [check_in.model_copy(deep=True) for check_in in self.original_check_ins]
-        store.state.commitments = [commitment.model_copy(deep=True) for commitment in self.original_commitments]
-        store.state.preferences = self.original_preferences.model_copy(deep=True)
+        store.clear_profile(self.profile_id)
         app_module.trained_selector = self.original_selector
 
     def test_strategy_endpoint_lists_repair_profiles(self) -> None:
-        response = self.client.get("/planner/strategies")
+        response = self.client.get("/planner/strategies", headers=self.headers)
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("strategies", payload)
@@ -43,6 +53,7 @@ class ApiRepairSelectorTests(unittest.TestCase):
         response = self.client.post(
             "/ml/train-repair-selector",
             json={"episodes": 20, "seed": 13},
+            headers=self.headers,
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -51,7 +62,7 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertTrue(payload["action_counts"])
 
     def test_replan_rl_endpoint_selects_strategy_and_returns_plan(self) -> None:
-        self.client.post("/ml/train-repair-selector", json={"episodes": 20, "seed": 17})
+        self.client.post("/ml/train-repair-selector", json={"episodes": 20, "seed": 17}, headers=self.headers)
         self.client.post(
             "/checkins",
             json={
@@ -60,9 +71,10 @@ class ApiRepairSelectorTests(unittest.TestCase):
                 "confidence_level": 3,
                 "note": "Testing RL-driven replanning.",
             },
+            headers=self.headers,
         )
 
-        task_id = store.list_tasks()[0].id
+        task_id = store.list_tasks(self.profile_id)[0].id
         today = date.today()
         week_start = today - timedelta(days=today.weekday())
 
@@ -73,6 +85,7 @@ class ApiRepairSelectorTests(unittest.TestCase):
                 "week_start": week_start.isoformat(),
                 "reason": "Missed the first deep-work block.",
             },
+            headers=self.headers,
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -97,19 +110,40 @@ class ApiRepairSelectorTests(unittest.TestCase):
                 "location": "Hasbrouck",
                 "notes": "Recurring lecture block.",
             },
+            headers=self.headers,
         )
         self.assertEqual(create_response.status_code, 201)
         created = create_response.json()
 
-        list_response = self.client.get("/commitments")
+        list_response = self.client.get("/commitments", headers=self.headers)
         self.assertEqual(list_response.status_code, 200)
         payload = list_response.json()
         self.assertEqual(len(payload), 1)
         self.assertEqual(payload[0]["title"], "Operating systems lecture")
 
-        delete_response = self.client.delete(f"/commitments/{created['id']}")
+        delete_response = self.client.delete(f"/commitments/{created['id']}", headers=self.headers)
         self.assertEqual(delete_response.status_code, 204)
-        self.assertEqual(self.client.get("/commitments").json(), [])
+        self.assertEqual(self.client.get("/commitments", headers=self.headers).json(), [])
+
+    def test_profile_header_isolates_commitments(self) -> None:
+        other_profile_headers = {"X-Profile-Id": f"other-{uuid4().hex}"}
+        self.client.post(
+            "/commitments",
+            json={
+                "title": "Networks lecture",
+                "day_of_week": 2,
+                "start": "13:00:00",
+                "end": "14:15:00",
+                "kind": "class",
+                "location": "Morrill",
+                "notes": "",
+            },
+            headers=self.headers,
+        )
+
+        self.assertEqual(len(self.client.get("/commitments", headers=self.headers).json()), 1)
+        self.assertEqual(self.client.get("/commitments", headers=other_profile_headers).json(), [])
+        store.clear_profile(other_profile_headers["X-Profile-Id"])
 
 
 if __name__ == "__main__":

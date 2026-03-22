@@ -48,6 +48,8 @@ The learning layer does not generate schedules directly. It selects the repair p
    `uvicorn backend.app.main:app --reload`
 4. Open `frontend/index.html` in a browser.
 
+The local build now stores data in SQLite and scopes tasks, check-ins, commitments, and preferences by profile id. The frontend defaults to `demo-user`, and the API also accepts `X-Profile-Id` for switching between students.
+
 ## Evaluate the RL selector
 Train and evaluate the repair selector from the repo root:
 

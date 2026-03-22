@@ -6,3 +6,4 @@
 *.err
 balanceos/
 .pip-cache/
+backend/data/
