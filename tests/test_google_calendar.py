@@ -72,6 +72,26 @@ class GoogleCalendarImportTests(unittest.TestCase):
         self.assertEqual(candidates[0].commitment.day_of_week, 1)
         self.assertEqual(skipped, 0)
 
+    def test_infer_weekly_commitments_skips_malformed_or_overnight_events(self) -> None:
+        events = [
+            {
+                "summary": "Late night study",
+                "start": {"dateTime": "2026-03-24T23:00:00-04:00"},
+                "end": {"dateTime": "2026-03-25T01:00:00-04:00"},
+                "recurringEventId": "late-night-study",
+            },
+            {
+                "summary": "Broken event",
+                "start": {"dateTime": "not-a-real-datetime"},
+                "end": {"dateTime": "still-not-a-real-datetime"},
+            },
+        ]
+
+        candidates, skipped = infer_weekly_commitments(events)
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(skipped, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

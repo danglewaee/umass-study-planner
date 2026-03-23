@@ -165,29 +165,33 @@ def infer_weekly_commitments(events: list[dict[str, Any]]) -> tuple[list[Importe
     skipped_events = 0
 
     for event in events:
-        start_raw = event.get("start", {})
-        end_raw = event.get("end", {})
-        if "dateTime" not in start_raw or "dateTime" not in end_raw:
+        try:
+            start_raw = event.get("start", {})
+            end_raw = event.get("end", {})
+            if "dateTime" not in start_raw or "dateTime" not in end_raw:
+                skipped_events += 1
+                continue
+
+            start_at = _parse_google_datetime(start_raw["dateTime"])
+            end_at = _parse_google_datetime(end_raw["dateTime"])
+            if end_at <= start_at:
+                skipped_events += 1
+                continue
+
+            source_key = event.get("recurringEventId") or _normalized_event_key(event, start_at, end_at)
+            buckets.setdefault(source_key, []).append(
+                {
+                    "summary": event.get("summary") or "Google Calendar event",
+                    "location": event.get("location") or "",
+                    "start_at": start_at,
+                    "end_at": end_at,
+                    "source_key": source_key,
+                    "is_explicitly_recurring": bool(event.get("recurringEventId") or event.get("recurrence")),
+                }
+            )
+        except Exception:
             skipped_events += 1
             continue
-
-        start_at = _parse_google_datetime(start_raw["dateTime"])
-        end_at = _parse_google_datetime(end_raw["dateTime"])
-        if end_at <= start_at:
-            skipped_events += 1
-            continue
-
-        source_key = event.get("recurringEventId") or _normalized_event_key(event, start_at, end_at)
-        buckets.setdefault(source_key, []).append(
-            {
-                "summary": event.get("summary") or "Google Calendar event",
-                "location": event.get("location") or "",
-                "start_at": start_at,
-                "end_at": end_at,
-                "source_key": source_key,
-                "is_explicitly_recurring": bool(event.get("recurringEventId") or event.get("recurrence")),
-            }
-        )
 
     candidates: list[ImportedCommitmentCandidate] = []
     for bucket in buckets.values():
@@ -196,15 +200,20 @@ def infer_weekly_commitments(events: list[dict[str, Any]]) -> tuple[list[Importe
             skipped_events += len(bucket)
             continue
 
-        commitment = FixedCommitmentInput(
-            title=str(sample["summary"])[:120],
-            day_of_week=sample["start_at"].weekday(),
-            start=sample["start_at"].time().replace(second=0, microsecond=0),
-            end=sample["end_at"].time().replace(second=0, microsecond=0),
-            kind=_guess_commitment_kind(str(sample["summary"])),
-            location=str(sample["location"])[:120],
-            notes="Imported from Google Calendar.",
-        )
+        try:
+            commitment = FixedCommitmentInput(
+                title=str(sample["summary"])[:120],
+                day_of_week=sample["start_at"].weekday(),
+                start=sample["start_at"].time().replace(second=0, microsecond=0),
+                end=sample["end_at"].time().replace(second=0, microsecond=0),
+                kind=_guess_commitment_kind(str(sample["summary"])),
+                location=str(sample["location"])[:120],
+                notes="Imported from Google Calendar.",
+            )
+        except Exception:
+            skipped_events += len(bucket)
+            continue
+
         candidates.append(ImportedCommitmentCandidate(commitment=commitment, source_ref=str(sample["source_key"])))
 
     candidates.sort(key=lambda item: (item.commitment.day_of_week, item.commitment.start, item.commitment.title.lower()))
