@@ -17,6 +17,7 @@ import backend.app.main as app_module
 from backend.app.main import app
 from backend.app.google_calendar import GoogleTokenBundle
 from backend.app.models import TaskInput
+from backend.app.planner_ortools import ortools_available
 from backend.app.store import store
 
 
@@ -49,8 +50,13 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIn("strategies", payload)
+        self.assertIn("engines", payload)
+        self.assertEqual(payload["default_engine"], "heuristic_v1")
         self.assertIn("stability_aware", payload["strategies"])
         self.assertIn("deadline_rescue", payload["strategies"])
+        self.assertIn("heuristic_v1", payload["engines"])
+        if ortools_available():
+            self.assertIn("ortools_cp_sat", payload["engines"])
 
     def test_train_selector_endpoint_returns_summary(self) -> None:
         response = self.client.post(
@@ -61,6 +67,7 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["episodes"], 20)
+        self.assertEqual(payload["planner_engine"], "heuristic_v1")
         self.assertGreaterEqual(payload["unique_states"], 1)
         self.assertTrue(payload["action_counts"])
 
@@ -119,6 +126,28 @@ class ApiRepairSelectorTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["strategy_used"], "stability_aware")
         self.assertEqual(payload["engine_used"], "heuristic_v1")
+        self.assertIsNotNone(payload["metrics"])
+
+    def test_generate_week_uses_ortools_engine_when_requested(self) -> None:
+        if not ortools_available():
+            self.skipTest("OR-Tools is not installed in this environment.")
+
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+
+        response = self.client.post(
+            "/planner/generate-week",
+            json={
+                "week_start": week_start.isoformat(),
+                "strategy": "stability_aware",
+                "engine_name": "ortools_cp_sat",
+            },
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["engine_used"], "ortools_cp_sat")
         self.assertIsNotNone(payload["metrics"])
 
     def test_commitment_endpoints_round_trip(self) -> None:

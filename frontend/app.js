@@ -2,6 +2,10 @@ const byId = (id) => document.getElementById(id);
 
 const DEFAULT_VIEW = "overview";
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const LABEL_OVERRIDES = {
+  heuristic_v1: "Heuristic V1",
+  ortools_cp_sat: "OR-Tools CP-SAT",
+};
 const REPAIR_STRATEGY_META = {
   stability_aware: {
     title: "Protect What Still Works",
@@ -29,6 +33,8 @@ const state = {
   apiBase: byId("apiBase").value,
   profileId: byId("profileId").value,
   strategies: [],
+  engines: [],
+  defaultEngine: "heuristic_v1",
   tasks: [],
   commitments: [],
   canvasCourses: [],
@@ -53,6 +59,9 @@ function escapeHtml(value) {
 }
 
 function formatLabel(value) {
+  if (LABEL_OVERRIDES[String(value)]) {
+    return LABEL_OVERRIDES[String(value)];
+  }
   return String(value)
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -232,6 +241,29 @@ function populateStrategySelects(strategies) {
   });
   renderRepairStrategyCards();
   renderRepairPreview();
+}
+
+function populateEngineSelects(engines, defaultEngine) {
+  const selects = [byId("plannerEngineSelect"), byId("repairEngineSelect")];
+  const available = engines.length ? engines : [defaultEngine || "heuristic_v1"];
+
+  selects.forEach((select) => {
+    const previousValue = select.value;
+    select.innerHTML = "";
+
+    available.forEach((engine) => {
+      const option = document.createElement("option");
+      option.value = engine;
+      option.textContent = formatLabel(engine);
+      select.appendChild(option);
+    });
+
+    if (previousValue && available.includes(previousValue)) {
+      select.value = previousValue;
+    } else {
+      select.value = available.includes(defaultEngine) ? defaultEngine : available[0];
+    }
+  });
 }
 
 function populateRepairTasks(tasks) {
@@ -694,7 +726,8 @@ function renderPlan(plan, badgeMessage, tone = "good") {
   renderMetrics(plan.metrics);
   renderAlerts(plan.alerts);
   renderWeekPlan(plan);
-  setPlanBadge(badgeMessage, tone);
+  const engineSuffix = plan?.engine_used ? ` via ${formatLabel(plan.engine_used)}` : "";
+  setPlanBadge(`${badgeMessage}${engineSuffix}`, tone);
 }
 
 function renderRepairTaskContext() {
@@ -778,6 +811,9 @@ function renderRepairSummary(payload, mode) {
   if (plan && plan.strategy_used) {
     rows.push(`Planner strategy used: ${formatLabel(plan.strategy_used)}`);
   }
+  if (plan && plan.engine_used) {
+    rows.push(`Planner engine used: ${formatLabel(plan.engine_used)}`);
+  }
 
   if (plan && plan.metrics) {
     rows.push(`Scheduled tasks kept in play: ${plan.metrics.scheduled_tasks}`);
@@ -796,6 +832,7 @@ function renderSelectorSummary(summary) {
     `Unique states: ${summary.unique_states}`,
     `Average reward: ${summary.average_reward}`,
     `Final epsilon: ${summary.final_epsilon}`,
+    `Planner engine: ${formatLabel(summary.planner_engine || "heuristic_v1")}`,
     ...Object.entries(summary.action_counts || {}).map(
       ([strategy, count]) => `${formatLabel(strategy)} selected ${count} times during training`
     ),
@@ -835,6 +872,7 @@ function collectRepairPayload(includeStrategy = true) {
     task_id: taskId,
     week_start: collectWeekStart(),
     reason: byId("repairReason").value.trim() || "Task slipped.",
+    engine_name: byId("repairEngineSelect").value || undefined,
   };
 
   if (includeStrategy) {
@@ -874,7 +912,10 @@ async function loadInsights() {
 async function loadStrategies() {
   const payload = await api("/planner/strategies");
   state.strategies = payload.strategies || [];
+  state.engines = payload.engines || [];
+  state.defaultEngine = payload.default_engine || "heuristic_v1";
   populateStrategySelects(state.strategies);
+  populateEngineSelects(state.engines, state.defaultEngine);
 }
 
 async function loadPreferences() {
@@ -939,6 +980,7 @@ async function generatePlan() {
     week_start: collectWeekStart(),
     preferences: collectPreferences(),
     strategy: byId("strategySelect").value || "stability_aware",
+    engine_name: byId("plannerEngineSelect").value || undefined,
   };
   const plan = await api("/planner/generate-week", {
     method: "POST",
@@ -975,6 +1017,7 @@ async function trainSelector() {
   const payload = {
     episodes: Number(byId("trainEpisodes").value || 60),
     seed: Number(byId("trainSeed").value || 11),
+    engine_name: byId("repairEngineSelect").value || undefined,
   };
   const summary = await api("/ml/train-repair-selector", {
     method: "POST",

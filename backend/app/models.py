@@ -198,6 +198,7 @@ class WeeklyPlanRequest(BaseModel):
     week_start: date
     preferences: UserPreferences | None = None
     strategy: PlanStrategy = PlanStrategy.stability_aware
+    engine_name: str | None = None
 
 
 class PlanMetrics(BaseModel):
@@ -245,11 +246,13 @@ class ReplanRequest(BaseModel):
     week_start: date
     reason: str = Field(default="Task slipped")
     strategy: PlanStrategy | None = None
+    engine_name: str | None = None
 
 
 class RLTrainRequest(BaseModel):
     episodes: int = Field(default=60, ge=20, le=300)
     seed: int = Field(default=11, ge=0)
+    engine_name: str | None = None
 
 
 class RLTrainResponse(BaseModel):
@@ -257,6 +260,7 @@ class RLTrainResponse(BaseModel):
     unique_states: int
     average_reward: float
     final_epsilon: float
+    planner_engine: str
     action_counts: dict[str, int]
 
 
@@ -270,6 +274,7 @@ class RepairEvaluationRequest(BaseModel):
     training_episodes: int = Field(default=60, ge=20, le=300)
     evaluation_scenarios: int = Field(default=40, ge=10, le=200)
     seed: int = Field(default=11, ge=0)
+    engine_name: str | None = None
 
 
 class HealthResponse(BaseModel):

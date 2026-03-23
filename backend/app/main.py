@@ -40,7 +40,12 @@ from .models import (
     WeeklyPlanResponse,
 )
 from .planner import available_strategies, derive_user_insights, parse_brain_dump
-from .planner_engine import PlannerRequest, generate_plan as generate_plan_with_engine
+from .planner_engine import (
+    PlannerRequest,
+    available_planner_engines,
+    default_planner_engine,
+    generate_plan as generate_plan_with_engine,
+)
 from .store import DEFAULT_PROFILE_ID, store
 
 app = FastAPI(title="UMass Study Partner API", version="0.1.0")
@@ -424,17 +429,22 @@ def _run_planner(
     strategy: PlanStrategy = PlanStrategy.stability_aware,
     previous_plan: WeeklyPlanResponse | None = None,
     commitments: list[FixedCommitment] | None = None,
+    engine_name: str | None = None,
 ) -> WeeklyPlanResponse:
-    return generate_plan_with_engine(
-        PlannerRequest(
-            tasks=tasks,
-            week_start=week_start,
-            preferences=preferences,
-            strategy=strategy,
-            previous_plan=previous_plan,
-            commitments=commitments or [],
+    try:
+        return generate_plan_with_engine(
+            PlannerRequest(
+                tasks=tasks,
+                week_start=week_start,
+                preferences=preferences,
+                strategy=strategy,
+                previous_plan=previous_plan,
+                commitments=commitments or [],
+            ),
+            engine_name=engine_name,
         )
-    )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/planner/generate-week", response_model=WeeklyPlanResponse)
@@ -451,6 +461,7 @@ def generate_plan(
         preferences,
         strategy=payload.strategy,
         commitments=store.list_commitments(profile_id),
+        engine_name=payload.engine_name,
     )
 
 
@@ -462,7 +473,13 @@ def replan(
     current_tasks = store.list_tasks(profile_id)
     preferences = store.get_preferences(profile_id)
     commitments = store.list_commitments(profile_id)
-    previous_plan = _run_planner(current_tasks, payload.week_start, preferences, commitments=commitments)
+    previous_plan = _run_planner(
+        current_tasks,
+        payload.week_start,
+        preferences,
+        commitments=commitments,
+        engine_name=payload.engine_name,
+    )
     task = store.mark_delayed(payload.task_id, profile_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -474,6 +491,7 @@ def replan(
         strategy=payload.strategy or previous_plan.strategy_used,
         previous_plan=previous_plan,
         commitments=commitments,
+        engine_name=payload.engine_name,
     )
     plan.alerts.append(f"Replanned after delay: {payload.reason}")
     return plan
@@ -485,35 +503,53 @@ def replan_with_rl(
     profile_id: Annotated[str, Depends(resolve_profile_id)],
 ) -> RLReplanResponse:
     global trained_selector
+    selected_engine = payload.engine_name or default_planner_engine().name
     current_tasks = store.list_tasks(profile_id)
     preferences = store.get_preferences(profile_id)
     commitments = store.list_commitments(profile_id)
-    previous_plan = _run_planner(current_tasks, payload.week_start, preferences, commitments=commitments)
+    previous_plan = _run_planner(
+        current_tasks,
+        payload.week_start,
+        preferences,
+        commitments=commitments,
+        engine_name=selected_engine,
+    )
     task = store.mark_delayed(payload.task_id, profile_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if trained_selector is None:
-        trained_selector = train_repair_selector()
+    if trained_selector is None or trained_selector.planner_engine != selected_engine:
+        try:
+            trained_selector = train_repair_selector(engine_name=selected_engine)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     latest_check_ins = store.list_check_ins(profile_id)
     latest_stress = latest_check_ins[-1].stress_level if latest_check_ins else None
-    chosen, state, result = replan_with_selector(
-        store.list_tasks(profile_id),
-        payload.week_start,
-        preferences,
-        previous_plan,
-        payload.task_id,
-        trained_selector,
-        stress_level=latest_stress,
-    )
+    try:
+        chosen, state, result = replan_with_selector(
+            store.list_tasks(profile_id),
+            payload.week_start,
+            preferences,
+            previous_plan,
+            payload.task_id,
+            trained_selector,
+            stress_level=latest_stress,
+            engine_name=selected_engine,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     result.alerts.append(f"RL-selected repair strategy '{chosen.value}' after delay: {payload.reason}")
     return RLReplanResponse(chosen_strategy=chosen, encoded_state=state, result=result)
 
 
 @app.get("/planner/strategies")
-def list_strategies() -> dict[str, list[str]]:
-    return {"strategies": available_strategies()}
+def list_strategies() -> dict[str, object]:
+    return {
+        "strategies": available_strategies(),
+        "engines": available_planner_engines(),
+        "default_engine": default_planner_engine().name,
+    }
 
 
 @app.post("/checkins", response_model=UserInsights)
@@ -535,14 +571,33 @@ def get_insights(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Use
 @app.post("/ml/train-repair-selector", response_model=RLTrainResponse)
 def train_selector(payload: RLTrainRequest) -> RLTrainResponse:
     global trained_selector
-    trained_selector = train_repair_selector(episodes=payload.episodes, seed=payload.seed)
+    try:
+        trained_selector = train_repair_selector(
+            episodes=payload.episodes,
+            seed=payload.seed,
+            engine_name=payload.engine_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RLTrainResponse(**trained_selector.summary())
 
 
 @app.post("/ml/evaluate-repair-selector")
 def evaluate_selector(payload: RepairEvaluationRequest) -> dict:
-    agent = train_repair_selector(episodes=payload.training_episodes, seed=payload.seed)
-    return evaluate_repair_selector(agent, count=payload.evaluation_scenarios, seed=payload.seed + 1_000)
+    try:
+        agent = train_repair_selector(
+            episodes=payload.training_episodes,
+            seed=payload.seed,
+            engine_name=payload.engine_name,
+        )
+        return evaluate_repair_selector(
+            agent,
+            count=payload.evaluation_scenarios,
+            seed=payload.seed + 1_000,
+            engine_name=payload.engine_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/demo/seed-plan", response_model=WeeklyPlanResponse)

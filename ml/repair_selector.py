@@ -18,6 +18,7 @@ def _run_planner(
     preferences: UserPreferences,
     strategy: PlanStrategy = PlanStrategy.stability_aware,
     previous_plan: WeeklyPlanResponse | None = None,
+    engine_name: str | None = None,
 ) -> WeeklyPlanResponse:
     return generate_plan_with_engine(
         PlannerRequest(
@@ -26,7 +27,8 @@ def _run_planner(
             preferences=preferences,
             strategy=strategy,
             previous_plan=previous_plan,
-        )
+        ),
+        engine_name=engine_name,
     )
 
 
@@ -37,6 +39,7 @@ class TrainedRepairSelector:
     average_reward: float
     episodes: int
     final_epsilon: float
+    planner_engine: str = "heuristic_v1"
 
     def choose_action(self, state: tuple[int, int, int, int]) -> PlanStrategy:
         key = _state_key(state)
@@ -53,6 +56,7 @@ class TrainedRepairSelector:
             "unique_states": len(self.q_table),
             "average_reward": round(self.average_reward, 2),
             "final_epsilon": round(self.final_epsilon, 4),
+            "planner_engine": self.planner_engine,
             "action_counts": dict(self.action_counts),
         }
 
@@ -64,6 +68,7 @@ def train_repair_selector(
     epsilon: float = 0.25,
     epsilon_decay: float = 0.97,
     min_epsilon: float = 0.05,
+    engine_name: str | None = None,
 ) -> TrainedRepairSelector:
     rng = random.Random(seed)
     q_table = defaultdict(_empty_action_values)
@@ -72,7 +77,13 @@ def train_repair_selector(
 
     for episode in range(episodes):
         tasks, week_start, preferences = _generate_training_case(seed + episode)
-        previous_plan = _run_planner(tasks, week_start, preferences, strategy=PlanStrategy.stability_aware)
+        previous_plan = _run_planner(
+            tasks,
+            week_start,
+            preferences,
+            strategy=PlanStrategy.stability_aware,
+            engine_name=engine_name,
+        )
         shocked_tasks, delayed_task_id, _ = _apply_repair_shock(tasks, week_start, seed + 10_000 + episode)
         state = encode_state(shocked_tasks, week_start, preferences, previous_plan, delayed_task_id)
         state_key = _state_key(state)
@@ -85,6 +96,7 @@ def train_repair_selector(
                 preferences,
                 strategy=action,
                 previous_plan=previous_plan,
+                engine_name=engine_name,
             )
             reward = compute_reward(repaired)
             rollout_rewards[action] = reward
@@ -105,6 +117,7 @@ def train_repair_selector(
         average_reward=(sum(rewards) / len(rewards)) if rewards else 0.0,
         episodes=episodes,
         final_epsilon=epsilon,
+        planner_engine=engine_name or "heuristic_v1",
     )
 
 
@@ -116,10 +129,18 @@ def replan_with_selector(
     delayed_task_id: str | None,
     agent: TrainedRepairSelector,
     stress_level: int | None = None,
+    engine_name: str | None = None,
 ) -> tuple[PlanStrategy, tuple[int, int, int, int], WeeklyPlanResponse]:
     state = encode_state(tasks, week_start, preferences, previous_plan, delayed_task_id, stress_level)
     action = agent.choose_action(state)
-    result = _run_planner(tasks, week_start, preferences, strategy=action, previous_plan=previous_plan)
+    result = _run_planner(
+        tasks,
+        week_start,
+        preferences,
+        strategy=action,
+        previous_plan=previous_plan,
+        engine_name=engine_name or agent.planner_engine,
+    )
     return action, state, result
 
 
@@ -127,14 +148,23 @@ def evaluate_repair_selector(
     agent: TrainedRepairSelector,
     count: int = 40,
     seed: int = 101,
+    engine_name: str | None = None,
 ) -> dict:
     learned_rows = []
     fixed_rows: dict[str, list[dict]] = {action.value: [] for action in ACTIONS}
     action_distribution: Counter = Counter()
 
+    selected_engine = engine_name or agent.planner_engine
+
     for idx in range(count):
         tasks, week_start, preferences = _generate_training_case(seed + idx)
-        previous_plan = _run_planner(tasks, week_start, preferences, strategy=PlanStrategy.stability_aware)
+        previous_plan = _run_planner(
+            tasks,
+            week_start,
+            preferences,
+            strategy=PlanStrategy.stability_aware,
+            engine_name=selected_engine,
+        )
         shocked_tasks, delayed_task_id, shock_type = _apply_repair_shock(tasks, week_start, seed + 20_000 + idx)
 
         chosen, state, learned = replan_with_selector(
@@ -144,6 +174,7 @@ def evaluate_repair_selector(
             previous_plan,
             delayed_task_id,
             agent,
+            engine_name=selected_engine,
         )
         learned_rows.append(_extract_metrics(learned, compute_reward(learned), chosen.value, shock_type, state))
         action_distribution[chosen.value] += 1
@@ -155,6 +186,7 @@ def evaluate_repair_selector(
                 preferences,
                 strategy=action,
                 previous_plan=previous_plan,
+                engine_name=selected_engine,
             )
             fixed_rows[action.value].append(
                 _extract_metrics(result, compute_reward(result), action.value, shock_type, state)

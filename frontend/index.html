@@ -167,6 +167,10 @@
                     <select id="strategySelect"></select>
                   </label>
                   <label>
+                    Planner Engine
+                    <select id="plannerEngineSelect"></select>
+                  </label>
+                  <label>
                     Preferred Block
                     <input id="blockMinutes" type="number" value="90" min="30" max="180" />
                   </label>
@@ -508,6 +512,13 @@
 
               <select id="repairStrategy" hidden></select>
               <div id="repairStrategyCards" class="repair-strategy-grid"></div>
+
+              <div class="repair-grid repair-grid-two">
+                <label>
+                  Planner Engine
+                  <select id="repairEngineSelect"></select>
+                </label>
+              </div>
 
               <div id="repairPreview" class="integration-status neutral">
                 Pick a recovery style to see what tradeoff it makes.

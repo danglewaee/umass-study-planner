@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT))
 
 from backend.app.models import PlanStrategy, Task, TaskCategory, TaskStatus, UserPreferences
 from backend.app.planner import generate_weekly_plan
+from backend.app.planner_ortools import ortools_available
 from backend.app.planner_engine import PlannerRequest, available_planner_engines, generate_plan
 
 
@@ -56,7 +57,7 @@ class PlannerEngineTests(unittest.TestCase):
             )
         )
         self.assertEqual(plan.engine_used, "heuristic_v1")
-        self.assertEqual(available_planner_engines(), ["heuristic_v1"])
+        self.assertIn("heuristic_v1", available_planner_engines())
 
     def test_engine_wrapper_preserves_heuristic_outputs(self) -> None:
         direct = generate_weekly_plan(
@@ -81,6 +82,25 @@ class PlannerEngineTests(unittest.TestCase):
             [(block.day, block.start, block.title) for block in direct.blocks],
         )
         self.assertEqual(wrapped.engine_used, "heuristic_v1")
+
+    def test_ortools_engine_returns_plan_when_available(self) -> None:
+        if not ortools_available():
+            self.skipTest("OR-Tools is not installed in this environment.")
+
+        plan = generate_plan(
+            PlannerRequest(
+                tasks=self.tasks,
+                week_start=self.week_start,
+                preferences=self.preferences,
+                strategy=PlanStrategy.stability_aware,
+            ),
+            engine_name="ortools_cp_sat",
+        )
+
+        self.assertEqual(plan.engine_used, "ortools_cp_sat")
+        self.assertEqual(plan.strategy_used, PlanStrategy.stability_aware)
+        self.assertIsNotNone(plan.metrics)
+        self.assertGreaterEqual(plan.metrics.scheduled_tasks, 1)
 
 
 if __name__ == "__main__":

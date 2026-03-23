@@ -6,6 +6,7 @@ from typing import Protocol
 
 from .models import FixedCommitment, PlanStrategy, Task, UserPreferences, WeeklyPlanResponse
 from .planner import generate_weekly_plan
+from .planner_ortools import ENGINE_NAME as ORTOOLS_ENGINE_NAME, ORToolsPlannerEngine, ortools_available
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ _DEFAULT_ENGINE_NAME = "heuristic_v1"
 _ENGINES: dict[str, PlannerEngine] = {
     _DEFAULT_ENGINE_NAME: HeuristicPlannerEngine(),
 }
+if ortools_available():
+    _ENGINES[ORTOOLS_ENGINE_NAME] = ORToolsPlannerEngine()
 
 
 def available_planner_engines() -> list[str]:
