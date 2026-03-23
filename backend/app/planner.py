@@ -355,6 +355,7 @@ def generate_weekly_plan(
         alerts=alerts,
         score_summary=score_summary,
         strategy_used=strategy,
+        engine_used="heuristic_v1",
         metrics=metrics,
     )
 

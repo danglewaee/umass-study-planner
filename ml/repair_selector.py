@@ -6,9 +6,28 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
 from backend.app.models import PlanStrategy, Task, TaskCategory, TaskStatus, UserPreferences, WeeklyPlanResponse
-from backend.app.planner import available_strategies, generate_weekly_plan
+from backend.app.planner import available_strategies
+from backend.app.planner_engine import PlannerRequest, generate_plan as generate_plan_with_engine
 
 ACTIONS = tuple(PlanStrategy(strategy) for strategy in available_strategies())
+
+
+def _run_planner(
+    tasks: list[Task],
+    week_start: date,
+    preferences: UserPreferences,
+    strategy: PlanStrategy = PlanStrategy.stability_aware,
+    previous_plan: WeeklyPlanResponse | None = None,
+) -> WeeklyPlanResponse:
+    return generate_plan_with_engine(
+        PlannerRequest(
+            tasks=tasks,
+            week_start=week_start,
+            preferences=preferences,
+            strategy=strategy,
+            previous_plan=previous_plan,
+        )
+    )
 
 
 @dataclass
@@ -53,14 +72,14 @@ def train_repair_selector(
 
     for episode in range(episodes):
         tasks, week_start, preferences = _generate_training_case(seed + episode)
-        previous_plan = generate_weekly_plan(tasks, week_start, preferences, strategy=PlanStrategy.stability_aware)
+        previous_plan = _run_planner(tasks, week_start, preferences, strategy=PlanStrategy.stability_aware)
         shocked_tasks, delayed_task_id, _ = _apply_repair_shock(tasks, week_start, seed + 10_000 + episode)
         state = encode_state(shocked_tasks, week_start, preferences, previous_plan, delayed_task_id)
         state_key = _state_key(state)
 
         rollout_rewards = {}
         for action in ACTIONS:
-            repaired = generate_weekly_plan(
+            repaired = _run_planner(
                 shocked_tasks,
                 week_start,
                 preferences,
@@ -100,7 +119,7 @@ def replan_with_selector(
 ) -> tuple[PlanStrategy, tuple[int, int, int, int], WeeklyPlanResponse]:
     state = encode_state(tasks, week_start, preferences, previous_plan, delayed_task_id, stress_level)
     action = agent.choose_action(state)
-    result = generate_weekly_plan(tasks, week_start, preferences, strategy=action, previous_plan=previous_plan)
+    result = _run_planner(tasks, week_start, preferences, strategy=action, previous_plan=previous_plan)
     return action, state, result
 
 
@@ -115,7 +134,7 @@ def evaluate_repair_selector(
 
     for idx in range(count):
         tasks, week_start, preferences = _generate_training_case(seed + idx)
-        previous_plan = generate_weekly_plan(tasks, week_start, preferences, strategy=PlanStrategy.stability_aware)
+        previous_plan = _run_planner(tasks, week_start, preferences, strategy=PlanStrategy.stability_aware)
         shocked_tasks, delayed_task_id, shock_type = _apply_repair_shock(tasks, week_start, seed + 20_000 + idx)
 
         chosen, state, learned = replan_with_selector(
@@ -130,7 +149,7 @@ def evaluate_repair_selector(
         action_distribution[chosen.value] += 1
 
         for action in ACTIONS:
-            result = generate_weekly_plan(
+            result = _run_planner(
                 shocked_tasks,
                 week_start,
                 preferences,

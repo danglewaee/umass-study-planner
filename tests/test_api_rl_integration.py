@@ -99,7 +99,27 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertEqual(len(payload["encoded_state"]), 4)
         self.assertIn("result", payload)
         self.assertIn("strategy_used", payload["result"])
+        self.assertEqual(payload["result"]["engine_used"], "heuristic_v1")
         self.assertIsNotNone(payload["result"]["metrics"])
+
+    def test_generate_week_endpoint_exposes_engine_metadata(self) -> None:
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+
+        response = self.client.post(
+            "/planner/generate-week",
+            json={
+                "week_start": week_start.isoformat(),
+                "strategy": "stability_aware",
+            },
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["strategy_used"], "stability_aware")
+        self.assertEqual(payload["engine_used"], "heuristic_v1")
+        self.assertIsNotNone(payload["metrics"])
 
     def test_commitment_endpoints_round_trip(self) -> None:
         create_response = self.client.post(

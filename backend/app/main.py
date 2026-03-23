@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
@@ -26,6 +26,7 @@ from .models import (
     GoogleImportRequest,
     GoogleImportResponse,
     HealthResponse,
+    PlanStrategy,
     RepairEvaluationRequest,
     RLReplanResponse,
     RLTrainRequest,
@@ -38,7 +39,8 @@ from .models import (
     WeeklyPlanRequest,
     WeeklyPlanResponse,
 )
-from .planner import available_strategies, derive_user_insights, generate_weekly_plan, parse_brain_dump
+from .planner import available_strategies, derive_user_insights, parse_brain_dump
+from .planner_engine import PlannerRequest, generate_plan as generate_plan_with_engine
 from .store import DEFAULT_PROFILE_ID, store
 
 app = FastAPI(title="UMass Study Partner API", version="0.1.0")
@@ -415,6 +417,26 @@ def update_preferences(
     return store.set_preferences(payload, profile_id)
 
 
+def _run_planner(
+    tasks: list[Task],
+    week_start: date,
+    preferences: UserPreferences,
+    strategy: PlanStrategy = PlanStrategy.stability_aware,
+    previous_plan: WeeklyPlanResponse | None = None,
+    commitments: list[FixedCommitment] | None = None,
+) -> WeeklyPlanResponse:
+    return generate_plan_with_engine(
+        PlannerRequest(
+            tasks=tasks,
+            week_start=week_start,
+            preferences=preferences,
+            strategy=strategy,
+            previous_plan=previous_plan,
+            commitments=commitments or [],
+        )
+    )
+
+
 @app.post("/planner/generate-week", response_model=WeeklyPlanResponse)
 def generate_plan(
     payload: WeeklyPlanRequest,
@@ -423,7 +445,7 @@ def generate_plan(
     preferences = payload.preferences or store.get_preferences(profile_id)
     if payload.preferences:
         store.set_preferences(payload.preferences, profile_id)
-    return generate_weekly_plan(
+    return _run_planner(
         store.list_tasks(profile_id),
         payload.week_start,
         preferences,
@@ -440,12 +462,12 @@ def replan(
     current_tasks = store.list_tasks(profile_id)
     preferences = store.get_preferences(profile_id)
     commitments = store.list_commitments(profile_id)
-    previous_plan = generate_weekly_plan(current_tasks, payload.week_start, preferences, commitments=commitments)
+    previous_plan = _run_planner(current_tasks, payload.week_start, preferences, commitments=commitments)
     task = store.mark_delayed(payload.task_id, profile_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    plan = generate_weekly_plan(
+    plan = _run_planner(
         store.list_tasks(profile_id),
         payload.week_start,
         preferences,
@@ -466,7 +488,7 @@ def replan_with_rl(
     current_tasks = store.list_tasks(profile_id)
     preferences = store.get_preferences(profile_id)
     commitments = store.list_commitments(profile_id)
-    previous_plan = generate_weekly_plan(current_tasks, payload.week_start, preferences, commitments=commitments)
+    previous_plan = _run_planner(current_tasks, payload.week_start, preferences, commitments=commitments)
     task = store.mark_delayed(payload.task_id, profile_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -530,7 +552,7 @@ def seed_plan(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Weekly
     week_start = today - timedelta(days=today.weekday()) if today else None
     if not week_start:
         raise HTTPException(status_code=400, detail="No tasks available")
-    return generate_weekly_plan(
+    return _run_planner(
         tasks,
         week_start,
         store.get_preferences(profile_id),

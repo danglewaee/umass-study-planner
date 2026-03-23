@@ -217,6 +217,7 @@ class WeeklyPlanResponse(BaseModel):
     alerts: list[str]
     score_summary: dict[str, float]
     strategy_used: PlanStrategy = PlanStrategy.stability_aware
+    engine_used: str = "heuristic_v1"
     metrics: PlanMetrics | None = None
 
 
