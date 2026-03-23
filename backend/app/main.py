@@ -8,10 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from ml.repair_selector import TrainedRepairSelector, evaluate_repair_selector, replan_with_selector, train_repair_selector
-from . import google_calendar
+from . import canvas, google_calendar
 from .models import (
     BrainDumpRequest,
     BrainDumpResponse,
+    CanvasConnectionInput,
+    CanvasConnectionStatus,
+    CanvasCourseSummary,
+    CanvasImportRequest,
+    CanvasImportResponse,
     CheckInInput,
     FixedCommitment,
     FixedCommitmentInput,
@@ -116,6 +121,28 @@ def _ensure_google_connection(profile_id: str):
             scope=refreshed.scope or connection.scope,
             token_expiry=refreshed.expires_at,
         )
+    return connection
+
+
+def _canvas_status(profile_id: str) -> CanvasConnectionStatus:
+    connection = store.get_canvas_connection(profile_id)
+    if not connection:
+        return CanvasConnectionStatus(
+            connected=False,
+            message="Canvas is not connected for this student profile yet.",
+        )
+    return CanvasConnectionStatus(
+        connected=True,
+        base_url=connection.base_url,
+        last_synced_at=connection.last_synced_at,
+        message="Canvas connected.",
+    )
+
+
+def _ensure_canvas_connection(profile_id: str):
+    connection = store.get_canvas_connection(profile_id)
+    if not connection:
+        raise HTTPException(status_code=404, detail="No Canvas connection found for this student profile.")
     return connection
 
 
@@ -247,6 +274,93 @@ def import_google_commitments(
 @app.delete("/integrations/google/connection", status_code=204)
 def disconnect_google(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Response:
     store.clear_google_connection(profile_id)
+    return Response(status_code=204)
+
+
+@app.get("/integrations/canvas/status", response_model=CanvasConnectionStatus)
+def canvas_status(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> CanvasConnectionStatus:
+    return _canvas_status(profile_id)
+
+
+@app.put("/integrations/canvas/connection", response_model=CanvasConnectionStatus)
+def connect_canvas(
+    payload: CanvasConnectionInput,
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+) -> CanvasConnectionStatus:
+    try:
+        base_url = canvas.normalize_base_url(payload.base_url)
+        canvas.list_courses(base_url, payload.access_token)
+    except Exception as exc:  # pragma: no cover - provider/network failure path
+        raise HTTPException(status_code=502, detail=f"Failed to connect to Canvas: {exc}") from exc
+
+    store.upsert_canvas_connection(profile_id, base_url=base_url, access_token=payload.access_token)
+    return CanvasConnectionStatus(
+        connected=True,
+        base_url=base_url,
+        message="Canvas connected and ready to import assignments.",
+    )
+
+
+@app.get("/integrations/canvas/courses", response_model=list[CanvasCourseSummary])
+def canvas_courses(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> list[CanvasCourseSummary]:
+    connection = _ensure_canvas_connection(profile_id)
+    try:
+        return canvas.list_courses(connection.base_url, connection.access_token)
+    except Exception as exc:  # pragma: no cover - provider/network failure path
+        raise HTTPException(status_code=502, detail=f"Failed to fetch Canvas courses: {exc}") from exc
+
+
+@app.post("/integrations/canvas/import-assignments", response_model=CanvasImportResponse)
+def import_canvas_assignments(
+    payload: CanvasImportRequest,
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+) -> CanvasImportResponse:
+    connection = _ensure_canvas_connection(profile_id)
+    course_name = payload.course_name.strip() or f"Canvas course {payload.course_id}"
+
+    try:
+        assignments = canvas.list_assignments(connection.base_url, connection.access_token, payload.course_id)
+    except Exception as exc:  # pragma: no cover - provider/network failure path
+        raise HTTPException(status_code=502, detail=f"Failed to fetch Canvas assignments: {exc}") from exc
+
+    task_candidates, skipped_assignments = canvas.infer_assignment_tasks(
+        assignments,
+        course_name=course_name,
+        default_estimated_minutes=payload.default_estimated_minutes,
+        default_difficulty=payload.default_difficulty,
+    )
+
+    imported_tasks = 0
+    updated_tasks = 0
+    imported_titles: list[str] = []
+    for assignment_id, task_input in task_candidates:
+        task, created = store.upsert_canvas_task(
+            task_input,
+            profile_id,
+            course_id=payload.course_id,
+            assignment_id=assignment_id,
+        )
+        imported_titles.append(task.title)
+        if created:
+            imported_tasks += 1
+        else:
+            updated_tasks += 1
+
+    store.touch_canvas_sync(profile_id)
+    return CanvasImportResponse(
+        course_id=payload.course_id,
+        course_name=course_name,
+        imported_tasks=imported_tasks,
+        updated_tasks=updated_tasks,
+        skipped_assignments=skipped_assignments,
+        imported_titles=sorted(set(imported_titles)),
+        message="Imported Canvas assignments with due dates into academic tasks.",
+    )
+
+
+@app.delete("/integrations/canvas/connection", status_code=204)
+def disconnect_canvas(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Response:
+    store.clear_canvas_connection(profile_id)
     return Response(status_code=204)
 
 

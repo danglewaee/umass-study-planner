@@ -344,6 +344,64 @@
 
           <section id="taskStats" class="task-stat-grid"></section>
 
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Canvas</p>
+                  <h2>Import Course Assignments</h2>
+                  <p class="module-subtitle">
+                    Connect Canvas with a personal access token, choose a course, then import due assignments into tasks.
+                  </p>
+                </div>
+              </div>
+              <div id="canvasConnectionStatus" class="integration-status neutral">
+                Canvas is not connected for this student profile yet.
+              </div>
+              <div class="form-grid">
+                <label>
+                  Canvas Base URL
+                  <input id="canvasBaseUrl" placeholder="https://your-school.instructure.com" />
+                </label>
+                <label>
+                  Personal Access Token
+                  <input id="canvasAccessToken" type="password" placeholder="Paste Canvas token" />
+                </label>
+              </div>
+              <div class="toolbar">
+                <button id="connectCanvas" class="secondary">Connect Canvas</button>
+                <button id="refreshCanvasStatus" class="secondary">Refresh Status</button>
+                <button id="disconnectCanvas" class="secondary">Disconnect</button>
+              </div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Assignments</p>
+                  <h2>Import Into Tasks</h2>
+                  <p class="module-subtitle">Assignments with due dates become academic tasks that the planner can schedule.</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Course
+                  <select id="canvasCourseSelect">
+                    <option value="">Connect Canvas first</option>
+                  </select>
+                </label>
+                <label>
+                  Default Effort (minutes)
+                  <input id="canvasDefaultMinutes" type="number" min="15" max="720" value="90" />
+                </label>
+              </div>
+              <div class="toolbar">
+                <button id="importCanvasAssignments" class="secondary">Import Assignments</button>
+              </div>
+              <div id="canvasImportSummary" class="list"></div>
+            </section>
+          </section>
+
           <section class="module-card">
             <div class="module-head">
               <div>

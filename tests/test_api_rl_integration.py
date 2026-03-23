@@ -241,6 +241,78 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertEqual(len(commitments), 1)
         self.assertEqual(commitments[0]["title"], "Algorithms lecture")
 
+    def test_canvas_connection_status_and_courses(self) -> None:
+        sample_courses = [
+            {"id": 101, "name": "COMPSCI 320", "course_code": "COMPSCI-320", "workflow_state": "available"},
+        ]
+
+        with patch("backend.app.main.canvas.list_courses", return_value=sample_courses):
+            connect_response = self.client.put(
+                "/integrations/canvas/connection",
+                json={
+                    "base_url": "https://umass.instructure.com",
+                    "access_token": "canvas-personal-token-for-tests",
+                },
+                headers=self.headers,
+            )
+            self.assertEqual(connect_response.status_code, 200)
+
+            status_response = self.client.get("/integrations/canvas/status", headers=self.headers)
+            self.assertEqual(status_response.status_code, 200)
+            self.assertTrue(status_response.json()["connected"])
+
+            courses_response = self.client.get("/integrations/canvas/courses", headers=self.headers)
+            self.assertEqual(courses_response.status_code, 200)
+            self.assertEqual(len(courses_response.json()), 1)
+            self.assertEqual(courses_response.json()[0]["id"], 101)
+
+    def test_canvas_import_assignments_upserts_without_duplicates(self) -> None:
+        sample_assignments = [
+            {
+                "id": 9001,
+                "name": "Distributed systems milestone",
+                "description": "<p>Implement the worker queue.</p>",
+                "due_at": "2026-03-28T23:59:00Z",
+                "html_url": "https://umass.instructure.com/courses/101/assignments/9001",
+            }
+        ]
+
+        store.upsert_canvas_connection(
+            self.profile_id,
+            base_url="https://umass.instructure.com",
+            access_token="canvas-personal-token-for-tests",
+        )
+
+        with patch("backend.app.main.canvas.list_assignments", return_value=sample_assignments):
+            first = self.client.post(
+                "/integrations/canvas/import-assignments",
+                json={
+                    "course_id": 101,
+                    "course_name": "COMPSCI 320",
+                    "default_estimated_minutes": 120,
+                    "default_difficulty": 4,
+                },
+                headers=self.headers,
+            )
+            second = self.client.post(
+                "/integrations/canvas/import-assignments",
+                json={
+                    "course_id": 101,
+                    "course_name": "COMPSCI 320",
+                    "default_estimated_minutes": 120,
+                    "default_difficulty": 4,
+                },
+                headers=self.headers,
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["imported_tasks"], 1)
+        self.assertEqual(second.json()["updated_tasks"], 1)
+        tasks = self.client.get("/tasks", headers=self.headers).json()
+        imported = [task for task in tasks if task["title"] == "COMPSCI 320: Distributed systems milestone"]
+        self.assertEqual(len(imported), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

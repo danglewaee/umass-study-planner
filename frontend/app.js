@@ -8,6 +8,7 @@ const state = {
   profileId: byId("profileId").value,
   strategies: [],
   tasks: [],
+  canvasCourses: [],
   googleCalendars: [],
   activeView: DEFAULT_VIEW,
 };
@@ -341,6 +342,74 @@ function renderGoogleImportSummary(summary) {
   );
 }
 
+function renderCanvasStatus(status) {
+  const container = byId("canvasConnectionStatus");
+  const tone = status.connected ? "good" : "neutral";
+  container.className = `integration-status ${tone}`;
+
+  if (!status.connected) {
+    container.innerHTML = `
+      <strong>Canvas is ready to connect.</strong>
+      <div class="task-meta"><small>${escapeHtml(status.message || "Paste your Canvas base URL and personal access token.")}</small></div>
+    `;
+    renderCanvasCourses([]);
+    return;
+  }
+
+  container.innerHTML = `
+    <strong>Connected to ${escapeHtml(status.base_url || "Canvas")}</strong>
+    <div class="task-meta"><small>Last sync: ${escapeHtml(formatDateTimeLabel(status.last_synced_at))}</small></div>
+  `;
+}
+
+function renderCanvasCourses(courses) {
+  state.canvasCourses = courses;
+  const select = byId("canvasCourseSelect");
+  const previousValue = select.value;
+  select.innerHTML = "";
+
+  if (!courses.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Connect Canvas first";
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  courses.forEach((course) => {
+    const option = document.createElement("option");
+    option.value = String(course.id);
+    option.textContent = course.course_code ? `${course.name} (${course.course_code})` : course.name;
+    option.dataset.courseName = course.name;
+    select.appendChild(option);
+  });
+
+  if (previousValue && courses.some((course) => String(course.id) === previousValue)) {
+    select.value = previousValue;
+  }
+}
+
+function renderCanvasImportSummary(summary) {
+  const rows = summary
+    ? [
+        `Course: ${summary.course_name}`,
+        `Imported tasks: ${summary.imported_tasks}`,
+        `Updated tasks: ${summary.updated_tasks}`,
+        `Skipped assignments: ${summary.skipped_assignments}`,
+        summary.message,
+        ...summary.imported_titles.map((title) => `Imported: ${title}`),
+      ]
+    : [];
+  renderList(
+    "canvasImportSummary",
+    rows,
+    (row) => escapeHtml(row),
+    "No Canvas import has been run for this profile yet."
+  );
+}
+
 function renderScores(scores = {}) {
   const container = byId("scoreSummary");
   const entries = Object.entries(scores);
@@ -577,8 +646,25 @@ async function loadGoogleStatus() {
   }
 }
 
+async function loadCanvasStatus() {
+  const status = await api("/integrations/canvas/status");
+  renderCanvasStatus(status);
+  byId("canvasBaseUrl").value = status.base_url || byId("canvasBaseUrl").value;
+  if (status.connected) {
+    const courses = await api("/integrations/canvas/courses");
+    renderCanvasCourses(courses);
+  }
+}
+
 async function loadProfileData() {
-  await Promise.all([loadTasks(), loadInsights(), loadCommitments(), loadPreferences(), loadGoogleStatus()]);
+  await Promise.all([
+    loadTasks(),
+    loadInsights(),
+    loadCommitments(),
+    loadPreferences(),
+    loadGoogleStatus(),
+    loadCanvasStatus(),
+  ]);
 }
 
 async function parseBrainDump() {
@@ -708,6 +794,49 @@ async function importGoogleCommitments() {
   setActiveView("planner");
 }
 
+async function connectCanvas() {
+  const payload = {
+    base_url: byId("canvasBaseUrl").value.trim(),
+    access_token: byId("canvasAccessToken").value.trim(),
+  };
+  await api("/integrations/canvas/connection", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  byId("canvasAccessToken").value = "";
+  await loadCanvasStatus();
+}
+
+async function disconnectCanvas() {
+  await api("/integrations/canvas/connection", { method: "DELETE" });
+  renderCanvasImportSummary(null);
+  renderCanvasCourses([]);
+  await loadCanvasStatus();
+}
+
+async function importCanvasAssignments() {
+  const courseSelect = byId("canvasCourseSelect");
+  const option = courseSelect.selectedOptions[0];
+  const courseId = Number(courseSelect.value);
+  if (!courseId) {
+    throw new Error("Choose a Canvas course before importing assignments.");
+  }
+
+  const payload = {
+    course_id: courseId,
+    course_name: option?.dataset?.courseName || option?.textContent || "",
+    default_estimated_minutes: Number(byId("canvasDefaultMinutes").value || 90),
+    default_difficulty: 3,
+  };
+  const summary = await api("/integrations/canvas/import-assignments", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  renderCanvasImportSummary(summary);
+  await Promise.all([loadTasks(), loadCanvasStatus()]);
+  setActiveView("tasks");
+}
+
 function bindRoutes() {
   document.querySelectorAll("[data-route-link]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -737,6 +866,10 @@ function bindEvents() {
   byId("refreshGoogleStatus").addEventListener("click", () => loadGoogleStatus().catch(handleError));
   byId("disconnectGoogleCalendar").addEventListener("click", () => disconnectGoogleCalendar().catch(handleError));
   byId("importGoogleCommitments").addEventListener("click", () => importGoogleCommitments().catch(handleError));
+  byId("connectCanvas").addEventListener("click", () => connectCanvas().catch(handleError));
+  byId("refreshCanvasStatus").addEventListener("click", () => loadCanvasStatus().catch(handleError));
+  byId("disconnectCanvas").addEventListener("click", () => disconnectCanvas().catch(handleError));
+  byId("importCanvasAssignments").addEventListener("click", () => importCanvasAssignments().catch(handleError));
   byId("submitCheckin").addEventListener("click", () => submitCheckin().catch(handleError));
   byId("loadSeed").addEventListener("click", () => loadSeedPlan().catch(handleError));
   byId("replanStrategy").addEventListener("click", () => replanWithStrategy().catch(handleError));
@@ -744,10 +877,12 @@ function bindEvents() {
   byId("trainSelector").addEventListener("click", () => trainSelector().catch(handleError));
   byId("profileId").addEventListener("change", () => {
     renderGoogleImportSummary(null);
+    renderCanvasImportSummary(null);
     loadProfileData().catch(handleError);
   });
   byId("profileId").addEventListener("blur", () => {
     renderGoogleImportSummary(null);
+    renderCanvasImportSummary(null);
     loadProfileData().catch(handleError);
   });
   byId("commitmentList").addEventListener("click", (event) => {
@@ -772,6 +907,8 @@ async function init() {
   renderMetrics(null);
   renderParsedTasks([]);
   renderCommitments([]);
+  renderCanvasCourses([]);
+  renderCanvasImportSummary(null);
   renderGoogleCalendars([]);
   renderGoogleImportSummary(null);
   renderRepairSummary({}, "strategy");

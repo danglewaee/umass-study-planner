@@ -14,6 +14,7 @@ The current build combines a stronger product-facing dashboard with the repo's s
 - Parses brain-dump text into candidate tasks
 - Stores recurring fixed commitments such as classes, work shifts, clubs, and commute blocks
 - Supports profile-scoped Google Calendar connection state and recurring event import into fixed commitments
+- Supports profile-scoped Canvas connection state and assignment import into academic tasks
 - Generates weekly plans with one of four planner strategies:
   - `stability_aware`
   - `deadline_rescue`
@@ -74,6 +75,21 @@ Current import behavior:
 - All-day events and one-off calendar events are skipped on purpose
 - Re-importing the same calendar updates existing imported commitments instead of duplicating them
 
+## Canvas Import
+The Canvas integration is implemented as a practical prototype path for students: it uses a Canvas base URL plus a personal access token, then imports assignments with due dates into academic tasks.
+
+Typical flow:
+1. Find your Canvas base URL, for example `https://umass.instructure.com`
+2. Create a personal access token in your Canvas account
+3. Open the `Tasks` page in the dashboard
+4. Paste the Canvas base URL and token, then click `Connect Canvas`
+5. Choose a course and import assignments into tasks
+
+Current import behavior:
+- Only assignments with a due date are imported
+- Re-importing the same Canvas assignment updates the existing task instead of duplicating it
+- Imported tasks are labeled with their Canvas course name to make multi-course planning easier
+
 ## Evaluate the RL selector
 Train and evaluate the repair selector from the repo root:
 
@@ -89,4 +105,4 @@ python -m unittest discover -s tests -v
 ## Notes
 - The planner remains heuristic-based, but it now exposes strategy-aware replanning and plan-quality metrics that are useful in a product demo.
 - The RL module learns when to apply each repair strategy instead of trying to generate schedules directly.
-- Storage now persists to SQLite; PostgreSQL, encrypted OAuth token storage, app auth, and richer optimization can be added later without rewriting the app shape.
+- Storage now persists to SQLite; PostgreSQL, encrypted token storage, app auth, and richer optimization can be added later without rewriting the app shape.

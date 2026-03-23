@@ -138,6 +138,51 @@ class GoogleImportResponse(BaseModel):
     message: str
 
 
+class CanvasConnectionInput(BaseModel):
+    base_url: str = Field(min_length=10, max_length=160)
+    access_token: str = Field(min_length=20, max_length=512)
+
+
+class CanvasConnectionStatus(BaseModel):
+    connected: bool
+    base_url: str | None = None
+    last_synced_at: datetime | None = None
+    message: str | None = None
+
+
+class CanvasConnection(BaseModel):
+    profile_id: str
+    base_url: str
+    access_token: str
+    created_at: datetime
+    updated_at: datetime
+    last_synced_at: datetime | None = None
+
+
+class CanvasCourseSummary(BaseModel):
+    id: int
+    name: str
+    course_code: str | None = None
+    workflow_state: str | None = None
+
+
+class CanvasImportRequest(BaseModel):
+    course_id: int
+    course_name: str = Field(default="", max_length=160)
+    default_estimated_minutes: int = Field(default=90, ge=15, le=720)
+    default_difficulty: int = Field(default=3, ge=1, le=5)
+
+
+class CanvasImportResponse(BaseModel):
+    course_id: int
+    course_name: str
+    imported_tasks: int
+    updated_tasks: int
+    skipped_assignments: int
+    imported_titles: list[str]
+    message: str
+
+
 class ScheduleBlock(BaseModel):
     id: str
     title: str

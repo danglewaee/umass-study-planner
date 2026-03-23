@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .models import (
+    CanvasConnection,
     CheckIn,
     CheckInInput,
     FixedCommitment,
@@ -61,6 +62,16 @@ class SQLiteStore:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS task_sources (
+                    task_id TEXT PRIMARY KEY,
+                    profile_id TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    external_ref TEXT NOT NULL,
+                    last_synced_at TEXT NOT NULL,
+                    UNIQUE(profile_id, provider, scope_id, external_ref)
+                );
+
                 CREATE TABLE IF NOT EXISTS check_ins (
                     id TEXT PRIMARY KEY,
                     profile_id TEXT NOT NULL,
@@ -106,6 +117,15 @@ class SQLiteStore:
                     last_synced_at TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS canvas_connections (
+                    profile_id TEXT PRIMARY KEY,
+                    base_url TEXT NOT NULL,
+                    access_token TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_synced_at TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS oauth_states (
                     provider TEXT NOT NULL,
                     state TEXT PRIMARY KEY,
@@ -114,6 +134,7 @@ class SQLiteStore:
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_tasks_profile_deadline ON tasks (profile_id, deadline);
+                CREATE INDEX IF NOT EXISTS idx_task_sources_profile ON task_sources (profile_id, provider, scope_id);
                 CREATE INDEX IF NOT EXISTS idx_checkins_profile_created ON check_ins (profile_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_commitments_profile_day ON commitments (profile_id, day_of_week, start);
                 CREATE INDEX IF NOT EXISTS idx_commitment_sources_profile ON commitment_sources (profile_id, provider, calendar_id);
@@ -187,8 +208,10 @@ class SQLiteStore:
     def clear_profile(self, profile_id: str) -> None:
         normalized = self._normalize_profile_id(profile_id)
         with self._connect() as connection:
+            connection.execute("DELETE FROM task_sources WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM commitment_sources WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM google_connections WHERE profile_id = ?", (normalized,))
+            connection.execute("DELETE FROM canvas_connections WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM oauth_states WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM tasks WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM check_ins WHERE profile_id = ?", (normalized,))
@@ -257,6 +280,109 @@ class SQLiteStore:
                 (task_id, normalized),
             ).fetchone()
         return Task.model_validate(dict(row)) if row else None
+
+    def upsert_canvas_task(
+        self,
+        payload: TaskInput,
+        profile_id: str,
+        *,
+        course_id: int,
+        assignment_id: str,
+    ) -> tuple[Task, bool]:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        now = datetime.utcnow()
+        payload_dump = payload.model_dump(mode="json")
+        scope_id = str(course_id)
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT t.id, t.status, t.created_at
+                FROM task_sources ts
+                JOIN tasks t ON t.id = ts.task_id
+                WHERE ts.profile_id = ? AND ts.provider = ? AND ts.scope_id = ? AND ts.external_ref = ?
+                """,
+                (normalized, "canvas_assignment", scope_id, assignment_id),
+            ).fetchone()
+
+            if row:
+                connection.execute(
+                    """
+                    UPDATE tasks
+                    SET title = ?, description = ?, category = ?, deadline = ?, estimated_minutes = ?, difficulty = ?, priority = ?
+                    WHERE id = ? AND profile_id = ?
+                    """,
+                    (
+                        payload_dump["title"],
+                        payload_dump["description"],
+                        payload_dump["category"],
+                        payload_dump["deadline"],
+                        payload_dump["estimated_minutes"],
+                        payload_dump["difficulty"],
+                        payload_dump["priority"],
+                        row["id"],
+                        normalized,
+                    ),
+                )
+                connection.execute(
+                    """
+                    UPDATE task_sources
+                    SET last_synced_at = ?
+                    WHERE task_id = ? AND profile_id = ?
+                    """,
+                    (now.isoformat(), row["id"], normalized),
+                )
+                updated = connection.execute(
+                    """
+                    SELECT id, title, description, category, deadline, estimated_minutes,
+                           difficulty, priority, status, created_at
+                    FROM tasks
+                    WHERE id = ? AND profile_id = ?
+                    """,
+                    (row["id"], normalized),
+                ).fetchone()
+                return Task.model_validate(dict(updated)), False
+
+            task_id = str(uuid4())
+            connection.execute(
+                """
+                INSERT INTO tasks (
+                    id, profile_id, title, description, category, deadline,
+                    estimated_minutes, difficulty, priority, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    normalized,
+                    payload_dump["title"],
+                    payload_dump["description"],
+                    payload_dump["category"],
+                    payload_dump["deadline"],
+                    payload_dump["estimated_minutes"],
+                    payload_dump["difficulty"],
+                    payload_dump["priority"],
+                    "pending",
+                    now.isoformat(),
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO task_sources (
+                    task_id, profile_id, provider, scope_id, external_ref, last_synced_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    normalized,
+                    "canvas_assignment",
+                    scope_id,
+                    assignment_id,
+                    now.isoformat(),
+                ),
+            )
+
+        return Task(id=task_id, status="pending", created_at=now, **payload.model_dump()), True
 
     def mark_delayed(self, task_id: str, profile_id: str = DEFAULT_PROFILE_ID) -> Task | None:
         normalized = self._normalize_profile_id(profile_id)
@@ -585,6 +711,87 @@ class SQLiteStore:
                 (normalized,),
             ).fetchone()
         return GoogleConnection.model_validate(dict(row)) if row else None
+
+    def upsert_canvas_connection(
+        self,
+        profile_id: str,
+        *,
+        base_url: str,
+        access_token: str,
+    ) -> CanvasConnection:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        now = datetime.utcnow()
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO canvas_connections (
+                    profile_id, base_url, access_token, created_at, updated_at, last_synced_at
+                ) VALUES (?, ?, ?, ?, ?, COALESCE(
+                    (SELECT last_synced_at FROM canvas_connections WHERE profile_id = ?),
+                    NULL
+                ))
+                ON CONFLICT(profile_id) DO UPDATE SET
+                    base_url = excluded.base_url,
+                    access_token = excluded.access_token,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    normalized,
+                    base_url,
+                    access_token,
+                    now.isoformat(),
+                    now.isoformat(),
+                    normalized,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT profile_id, base_url, access_token, created_at, updated_at, last_synced_at
+                FROM canvas_connections
+                WHERE profile_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+
+        return CanvasConnection.model_validate(dict(row))
+
+    def get_canvas_connection(self, profile_id: str) -> CanvasConnection | None:
+        normalized = self._normalize_profile_id(profile_id)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT profile_id, base_url, access_token, created_at, updated_at, last_synced_at
+                FROM canvas_connections
+                WHERE profile_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        return CanvasConnection.model_validate(dict(row)) if row else None
+
+    def clear_canvas_connection(self, profile_id: str) -> None:
+        normalized = self._normalize_profile_id(profile_id)
+        with self._connect() as connection:
+            connection.execute("DELETE FROM canvas_connections WHERE profile_id = ?", (normalized,))
+
+    def touch_canvas_sync(self, profile_id: str) -> CanvasConnection | None:
+        normalized = self._normalize_profile_id(profile_id)
+        now = datetime.utcnow().isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE canvas_connections SET last_synced_at = ?, updated_at = ? WHERE profile_id = ?",
+                (now, now, normalized),
+            )
+            row = connection.execute(
+                """
+                SELECT profile_id, base_url, access_token, created_at, updated_at, last_synced_at
+                FROM canvas_connections
+                WHERE profile_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        return CanvasConnection.model_validate(dict(row)) if row else None
 
     def get_preferences(self, profile_id: str = DEFAULT_PROFILE_ID) -> UserPreferences:
         normalized = self._normalize_profile_id(profile_id)
