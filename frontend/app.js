@@ -2,6 +2,28 @@ const byId = (id) => document.getElementById(id);
 
 const DEFAULT_VIEW = "overview";
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const REPAIR_STRATEGY_META = {
+  stability_aware: {
+    title: "Protect What Still Works",
+    summary: "Keep as many existing blocks as possible so the week still feels familiar.",
+    tradeoff: "Best when you want low disruption and the missed task is not yet critical.",
+  },
+  deadline_rescue: {
+    title: "Rescue The Deadline",
+    summary: "Push the week toward the most urgent work before it starts cascading.",
+    tradeoff: "Best when a high-priority deadline or interview prep suddenly got risky.",
+  },
+  load_balance: {
+    title: "Reduce Overload",
+    summary: "Spread pressure more evenly so one bad day does not crush the rest of the week.",
+    tradeoff: "Best when the week feels too dense and you need a more survivable pace.",
+  },
+  focus_windows: {
+    title: "Match Energy Better",
+    summary: "Move the hardest work toward stronger focus windows and away from weaker hours.",
+    tradeoff: "Best when the problem is energy, attention, or timing rather than urgency alone.",
+  },
+};
 
 const state = {
   apiBase: byId("apiBase").value,
@@ -46,6 +68,14 @@ function formatDateTimeLabel(value) {
     return "Not synced yet";
   }
   return new Date(value).toLocaleString();
+}
+
+function repairMeta(strategy) {
+  return REPAIR_STRATEGY_META[strategy] || {
+    title: formatLabel(strategy || "strategy"),
+    summary: "Apply this repair mode to rebuild the week.",
+    tradeoff: "",
+  };
 }
 
 function parseIsoDate(value) {
@@ -115,12 +145,17 @@ function renderPreferences(preferences) {
   byId("blockMinutes").value = preferences.preferred_block_minutes;
 }
 
+function setWeekStartValue(value) {
+  byId("weekStart").value = value;
+  byId("repairWeekStart").value = value;
+}
+
 function setWeekStartDefault() {
   const now = new Date();
   const day = now.getDay();
   const diff = (day + 6) % 7;
   now.setDate(now.getDate() - diff);
-  byId("weekStart").value = now.toISOString().slice(0, 10);
+  setWeekStartValue(now.toISOString().slice(0, 10));
 }
 
 function setPlanBadge(message, tone = "neutral") {
@@ -173,6 +208,11 @@ function renderTaskStats(tasks) {
     .join("");
 }
 
+function selectedRepairTask() {
+  const taskId = byId("repairTask").value;
+  return state.tasks.find((task) => task.id === taskId) || null;
+}
+
 function populateStrategySelects(strategies) {
   const selects = [byId("strategySelect"), byId("repairStrategy")];
   selects.forEach((select) => {
@@ -190,6 +230,8 @@ function populateStrategySelects(strategies) {
       select.value = previousValue;
     }
   });
+  renderRepairStrategyCards();
+  renderRepairPreview();
 }
 
 function populateRepairTasks(tasks) {
@@ -204,6 +246,7 @@ function populateRepairTasks(tasks) {
     option.textContent = "No active tasks available";
     select.appendChild(option);
     select.disabled = true;
+    renderRepairTaskContext();
     return;
   }
 
@@ -218,6 +261,8 @@ function populateRepairTasks(tasks) {
   if (previousValue && activeTasks.some((task) => task.id === previousValue)) {
     select.value = previousValue;
   }
+  renderRepairTaskContext();
+  renderRepairPreview();
 }
 
 function renderTasks(tasks) {
@@ -652,24 +697,94 @@ function renderPlan(plan, badgeMessage, tone = "good") {
   setPlanBadge(badgeMessage, tone);
 }
 
+function renderRepairTaskContext() {
+  const task = selectedRepairTask();
+  const container = byId("repairTaskContext");
+
+  if (!task) {
+    container.className = "integration-status neutral";
+    container.innerHTML = "Choose an active task to explain what went wrong and how the week should recover.";
+    return;
+  }
+
+  const days = daysUntil(task.deadline);
+  const urgency = days <= 1 ? "Urgent risk" : days <= 3 ? "Watch closely" : "Still recoverable";
+  container.className = `integration-status ${days <= 1 ? "warning" : "neutral"}`;
+  container.innerHTML = `
+    <strong>${escapeHtml(task.title)}</strong>
+    <div class="task-meta"><small>${escapeHtml(formatLabel(task.category))} &middot; due ${escapeHtml(task.deadline)} &middot; ${escapeHtml(task.estimated_minutes)} min</small></div>
+    <div class="task-meta"><small>${escapeHtml(urgency)}${task.status === "delayed" ? " • already marked delayed" : ""}</small></div>
+  `;
+}
+
+function renderRepairStrategyCards() {
+  const container = byId("repairStrategyCards");
+  const selected = byId("repairStrategy").value;
+  const strategies = state.strategies.length ? state.strategies : Object.keys(REPAIR_STRATEGY_META);
+
+  container.innerHTML = strategies
+    .map((strategy) => {
+      const meta = repairMeta(strategy);
+      return `
+        <button type="button" class="repair-strategy-card ${selected === strategy ? "active" : ""}" data-repair-strategy="${escapeHtml(strategy)}">
+          <span class="eyebrow">${escapeHtml(formatLabel(strategy))}</span>
+          <strong>${escapeHtml(meta.title)}</strong>
+          <small>${escapeHtml(meta.summary)}</small>
+          <small>${escapeHtml(meta.tradeoff)}</small>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderRepairPreview() {
+  const strategy = byId("repairStrategy").value;
+  const task = selectedRepairTask();
+  const meta = repairMeta(strategy);
+  const container = byId("repairPreview");
+  container.className = "integration-status neutral";
+
+  if (!strategy) {
+    container.innerHTML = "Pick a recovery style to see what tradeoff it makes.";
+    return;
+  }
+
+  container.innerHTML = `
+    <strong>${escapeHtml(meta.title)}</strong>
+    <div class="task-meta"><small>${escapeHtml(meta.summary)}</small></div>
+    <div class="task-meta"><small>${escapeHtml(meta.tradeoff)}</small></div>
+    ${
+      task
+        ? `<div class="task-meta"><small>Current target: ${escapeHtml(task.title)} due ${escapeHtml(task.deadline)}.</small></div>`
+        : ""
+    }
+  `;
+}
+
 function renderRepairSummary(payload, mode) {
   const rows = [];
   const plan = mode === "rl" ? payload.result : payload;
+  const activeStrategy = mode === "rl" ? payload.chosen_strategy : plan?.strategy_used;
+  const meta = repairMeta(activeStrategy);
+
+  rows.push(`Repair mode: ${meta.title}`);
+  rows.push(meta.summary);
 
   if (mode === "rl" && payload.chosen_strategy && payload.encoded_state) {
-    rows.push(`Learned selector chose: ${formatLabel(payload.chosen_strategy)}`);
+    rows.push(`Study Partner chose ${meta.title.toLowerCase()} after reading the disruption state.`);
     rows.push(`Encoded repair state: ${payload.encoded_state.join(" / ")}`);
   }
 
   if (plan && plan.strategy_used) {
-    rows.push(`Plan strategy used: ${formatLabel(plan.strategy_used)}`);
+    rows.push(`Planner strategy used: ${formatLabel(plan.strategy_used)}`);
   }
 
   if (plan && plan.metrics) {
-    rows.push(`Scheduled tasks: ${plan.metrics.scheduled_tasks}`);
-    rows.push(`Preserved blocks: ${plan.metrics.preserved_blocks}`);
-    rows.push(`Overload days: ${plan.metrics.overload_days}`);
-    rows.push(`Focus alignment: ${plan.metrics.focus_alignment_pct}%`);
+    rows.push(`Scheduled tasks kept in play: ${plan.metrics.scheduled_tasks}`);
+    rows.push(`Existing blocks preserved: ${plan.metrics.preserved_blocks}`);
+    rows.push(`Overload days after repair: ${plan.metrics.overload_days}`);
+    rows.push(`Focus alignment after repair: ${plan.metrics.focus_alignment_pct}%`);
+    rows.push(`Unscheduled tasks left behind: ${plan.metrics.unscheduled_tasks}`);
   }
 
   renderList("repairSummary", rows, (row) => escapeHtml(row), "Run a repair action to inspect the result.");
@@ -701,7 +816,9 @@ function collectPreferences() {
 }
 
 function collectWeekStart() {
-  const weekStart = byId("weekStart").value;
+  const source = state.activeView === "repair" ? "repairWeekStart" : "weekStart";
+  const fallback = source === "repairWeekStart" ? "weekStart" : "repairWeekStart";
+  const weekStart = byId(source).value || byId(fallback).value;
   if (!weekStart) {
     throw new Error("Week start is required.");
   }
@@ -1023,6 +1140,16 @@ function bindEvents() {
   byId("replanStrategy").addEventListener("click", () => replanWithStrategy().catch(handleError));
   byId("replanRL").addEventListener("click", () => replanWithRL().catch(handleError));
   byId("trainSelector").addEventListener("click", () => trainSelector().catch(handleError));
+  byId("repairTask").addEventListener("change", () => {
+    renderRepairTaskContext();
+    renderRepairPreview();
+  });
+  byId("repairStrategy").addEventListener("change", () => {
+    renderRepairStrategyCards();
+    renderRepairPreview();
+  });
+  byId("weekStart").addEventListener("change", () => setWeekStartValue(byId("weekStart").value));
+  byId("repairWeekStart").addEventListener("change", () => setWeekStartValue(byId("repairWeekStart").value));
   byId("profileId").addEventListener("change", () => {
     renderGoogleImportSummary(null);
     renderCanvasImportSummary(null);
@@ -1047,6 +1174,20 @@ function bindEvents() {
     }
     setActiveView(button.dataset.onboardingRoute);
   });
+  byId("repairStrategyCards").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-repair-strategy]");
+    if (!button) {
+      return;
+    }
+    byId("repairStrategy").value = button.dataset.repairStrategy;
+    renderRepairStrategyCards();
+    renderRepairPreview();
+  });
+  document.querySelectorAll("[data-reason-preset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      byId("repairReason").value = button.dataset.reasonPreset;
+    });
+  });
 }
 
 function handleError(error) {
@@ -1067,6 +1208,9 @@ async function init() {
   renderGoogleCalendars([]);
   renderGoogleImportSummary(null);
   renderOnboarding();
+  renderRepairTaskContext();
+  renderRepairStrategyCards();
+  renderRepairPreview();
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
     episodes: 0,

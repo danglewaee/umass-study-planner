@@ -450,15 +450,15 @@
           <header class="page-banner simple-banner">
             <div>
               <p class="eyebrow">Repair Lab</p>
-              <h1>Handle disruptions on a dedicated page.</h1>
+              <h1>Recover the week when reality changes.</h1>
               <p class="page-subtitle">
-                Delay a task, compare a chosen strategy against RL repair, and keep the experiment separate from planning.
+                Start from the slipped task, pick the kind of recovery you want, then compare your choice against the learned repair policy.
               </p>
             </div>
             <section class="module-card banner-card compact-banner">
-              <p class="eyebrow">Why separate it?</p>
-              <h2>Cleaner demo story</h2>
-              <p class="module-subtitle">Planning builds the week. Repair Lab explains what happens when the week breaks.</p>
+              <p class="eyebrow">Goal</p>
+              <h2>Make the plan less fragile</h2>
+              <p class="module-subtitle">Use this page to rescue the week without throwing away every good block you already had.</p>
             </section>
           </header>
 
@@ -466,21 +466,54 @@
             <section class="module-card repair-controls-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Run Repair</p>
-                  <h2>Repair Controls</h2>
-                  <p class="module-subtitle">Choose the delayed task, optional strategy, and training setup.</p>
+                  <p class="eyebrow">Scenario</p>
+                  <h2>What just slipped?</h2>
+                  <p class="module-subtitle">Describe the disruption first, then decide how aggressive the repair should be.</p>
                 </div>
               </div>
 
-              <div class="repair-grid">
+              <div id="repairTaskContext" class="integration-status neutral">
+                Choose an active task to explain what went wrong and how the week should recover.
+              </div>
+
+              <div class="repair-grid repair-grid-two">
                 <label>
                   Delayed Task
                   <select id="repairTask"></select>
                 </label>
                 <label>
-                  Repair Strategy
-                  <select id="repairStrategy"></select>
+                  Week Start
+                  <input id="repairWeekStart" type="date" />
                 </label>
+                <label class="wide-field">
+                  Delay Reason
+                  <input id="repairReason" value="Missed the planned deep-work block." />
+                </label>
+              </div>
+
+              <div class="reason-chip-row">
+                <button type="button" class="secondary compact-button" data-reason-preset="Missed the planned deep-work block.">Missed study block</button>
+                <button type="button" class="secondary compact-button" data-reason-preset="An urgent deadline or interview prep took over the day.">Urgent deadline</button>
+                <button type="button" class="secondary compact-button" data-reason-preset="Energy crashed and I need a lighter recovery plan.">Energy crash</button>
+                <button type="button" class="secondary compact-button" data-reason-preset="The day is overloaded and needs rebalancing.">Overloaded day</button>
+              </div>
+
+              <div class="module-head compact-head">
+                <div>
+                  <p class="eyebrow">Repair Goal</p>
+                  <h2>How should the week recover?</h2>
+                  <p class="module-subtitle">Choose the planning instinct you want to apply before you compare it to RL.</p>
+                </div>
+              </div>
+
+              <select id="repairStrategy" hidden></select>
+              <div id="repairStrategyCards" class="repair-strategy-grid"></div>
+
+              <div id="repairPreview" class="integration-status neutral">
+                Pick a recovery style to see what tradeoff it makes.
+              </div>
+
+              <div class="repair-grid repair-grid-two">
                 <label>
                   Training Episodes
                   <input id="trainEpisodes" type="number" value="60" min="20" max="300" />
@@ -489,16 +522,12 @@
                   Seed
                   <input id="trainSeed" type="number" value="11" min="0" />
                 </label>
-                <label class="wide-field">
-                  Delay Reason
-                  <input id="repairReason" value="Missed the planned deep-work block." />
-                </label>
               </div>
 
               <div class="toolbar">
-                <button id="replanStrategy">Replan With Strategy</button>
-                <button id="replanRL" class="secondary">Replan With RL</button>
-                <button id="trainSelector" class="secondary">Train Selector</button>
+                <button id="replanStrategy">Run Chosen Repair</button>
+                <button id="replanRL" class="secondary">Let Study Partner Choose</button>
+                <button id="trainSelector" class="secondary">Refresh Learned Policy</button>
               </div>
             </section>
 
@@ -506,7 +535,7 @@
               <div class="module-head">
                 <div>
                   <p class="eyebrow">Result</p>
-                  <h2>Repair Summary</h2>
+                  <h2>What Changed</h2>
                 </div>
               </div>
               <div id="repairSummary" class="list compact-list"></div>

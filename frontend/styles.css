@@ -415,8 +415,53 @@ label,
   margin-bottom: 14px;
 }
 
+.repair-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .wide-field {
   grid-column: span 2;
+}
+
+.reason-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 18px;
+}
+
+.repair-strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.repair-strategy-card {
+  min-height: 0;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--text);
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  box-shadow: none;
+}
+
+.repair-strategy-card:hover {
+  box-shadow: var(--shadow);
+}
+
+.repair-strategy-card.active {
+  border-color: rgba(136, 28, 44, 0.32);
+  background: linear-gradient(180deg, rgba(245, 220, 225, 0.92), rgba(255, 251, 246, 0.96));
+}
+
+.repair-strategy-card small {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 label {
