@@ -55,8 +55,41 @@
             <section class="module-card overview-hero">
               <p class="eyebrow">Project</p>
               <h1 class="project-title">UMass Study Partner</h1>
+              <p class="page-subtitle">
+                Turn class schedules, Canvas deadlines, and real weekly obligations into a plan that can recover when the
+                week shifts.
+              </p>
+              <div class="toolbar">
+                <button id="onboardingAction">Continue Setup</button>
+              </div>
             </section>
           </header>
+
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Setup</p>
+                  <h2>First Week Guide</h2>
+                  <p class="module-subtitle">Use this checklist to connect data sources, import commitments, and get to a usable week fast.</p>
+                </div>
+              </div>
+              <div id="setupProgress" class="overview-stat-grid"></div>
+              <div id="setupChecklist" class="list compact-list"></div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Readiness</p>
+                  <h2>Current Student Signal</h2>
+                  <p class="module-subtitle">These signals tell you whether the current profile has enough structure to generate a meaningful week.</p>
+                </div>
+              </div>
+              <div id="setupSignals" class="overview-stat-grid"></div>
+              <div id="setupNotes" class="list compact-list"></div>
+            </section>
+          </section>
 
           <section class="component-grid">
             <article class="module-card component-card">

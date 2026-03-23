@@ -8,9 +8,13 @@ const state = {
   profileId: byId("profileId").value,
   strategies: [],
   tasks: [],
+  commitments: [],
   canvasCourses: [],
+  canvasStatus: null,
   googleCalendars: [],
+  googleStatus: null,
   activeView: DEFAULT_VIEW,
+  onboardingAction: { type: "route", view: "planner", label: "Open Planner" },
 };
 
 function escapeHtml(value) {
@@ -236,6 +240,7 @@ function renderTasks(tasks) {
     `,
     "No tasks available in the store yet."
   );
+  renderOnboarding();
 }
 
 function renderParsedTasks(tasks) {
@@ -408,6 +413,134 @@ function renderCanvasImportSummary(summary) {
     (row) => escapeHtml(row),
     "No Canvas import has been run for this profile yet."
   );
+}
+
+function renderOnboarding() {
+  const googleConnected = Boolean(state.googleStatus?.connected);
+  const canvasConnected = Boolean(state.canvasStatus?.connected);
+  const hasCommitments = state.commitments.length > 0;
+  const hasTasks = state.tasks.length > 0;
+  const completedSteps = [googleConnected, canvasConnected, hasCommitments, hasTasks].filter(Boolean).length;
+
+  byId("setupProgress").innerHTML = [
+    ["Setup Progress", `${completedSteps}/4`],
+    ["Tasks Ready", state.tasks.length],
+    ["Commitments", state.commitments.length],
+    ["Data Sources", `${Number(googleConnected) + Number(canvasConnected)}/2`],
+  ]
+    .map(
+      ([label, value]) => `
+        <div class="overview-stat">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </div>
+      `
+    )
+    .join("");
+
+  const steps = [
+    {
+      done: googleConnected,
+      label: "Connect Google Calendar",
+      detail: googleConnected
+        ? `Connected as ${state.googleStatus.connected_email || "Google user"}`
+        : "Import recurring classes and weekly obligations into commitments.",
+      route: "planner",
+      cta: "Open Planner",
+    },
+    {
+      done: canvasConnected,
+      label: "Connect Canvas",
+      detail: canvasConnected
+        ? `Connected to ${state.canvasStatus.base_url || "Canvas"}`
+        : "Import live assignment deadlines into tasks.",
+      route: "tasks",
+      cta: "Open Tasks",
+    },
+    {
+      done: hasCommitments,
+      label: "Build weekly structure",
+      detail: hasCommitments
+        ? `${state.commitments.length} fixed commitment(s) already loaded.`
+        : "Add or import at least one recurring block before generating a week.",
+      route: "planner",
+      cta: "Review Commitments",
+    },
+    {
+      done: hasTasks,
+      label: "Load work to schedule",
+      detail: hasTasks
+        ? `${state.tasks.length} task(s) available for planning.`
+        : "Import Canvas assignments or add manual tasks before planning.",
+      route: "tasks",
+      cta: "Review Tasks",
+    },
+  ];
+
+  renderList(
+    "setupChecklist",
+    steps,
+    (step) => `
+      <div class="setup-step">
+        <div>
+          <strong>${escapeHtml(step.label)}</strong>
+          <div class="task-meta"><small>${escapeHtml(step.detail)}</small></div>
+        </div>
+        <div class="setup-step-meta">
+          <span class="step-status ${step.done ? "done" : "todo"}">${step.done ? "Done" : "Next"}</span>
+          <button type="button" class="secondary compact-button" data-onboarding-route="${escapeHtml(step.route)}">${escapeHtml(step.cta)}</button>
+        </div>
+      </div>
+    `,
+    "No setup guidance available yet."
+  );
+
+  byId("setupSignals").innerHTML = [
+    ["Google", googleConnected ? "Connected" : "Not yet"],
+    ["Canvas", canvasConnected ? "Connected" : "Not yet"],
+    ["Planner Inputs", hasTasks && hasCommitments ? "Ready" : "Partial"],
+    ["First Week", hasTasks && hasCommitments ? "Can generate" : "Need more setup"],
+  ]
+    .map(
+      ([label, value]) => `
+        <div class="overview-stat">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </div>
+      `
+    )
+    .join("");
+
+  const notes = [];
+  if (!googleConnected) {
+    notes.push("Connect Google Calendar if you want the planner to respect recurring class blocks automatically.");
+  }
+  if (!canvasConnected) {
+    notes.push("Connect Canvas if you want assignments with due dates to appear as tasks without manual entry.");
+  }
+  if (!hasCommitments) {
+    notes.push("The week is still fragile without fixed commitments like class, work, club, or commute blocks.");
+  }
+  if (!hasTasks) {
+    notes.push("The planner needs at least one task before it can build a meaningful week.");
+  }
+  if (!notes.length) {
+    notes.push("This profile is ready for a first real week. Generate the week, then use Repair Lab when something slips.");
+  }
+  renderList("setupNotes", notes, (note) => escapeHtml(note), "Setup notes will appear here.");
+
+  if (!googleConnected) {
+    state.onboardingAction = { type: "route", view: "planner", label: "Connect Google" };
+  } else if (!canvasConnected) {
+    state.onboardingAction = { type: "route", view: "tasks", label: "Connect Canvas" };
+  } else if (!hasCommitments) {
+    state.onboardingAction = { type: "route", view: "planner", label: "Add Commitments" };
+  } else if (!hasTasks) {
+    state.onboardingAction = { type: "route", view: "tasks", label: "Add Tasks" };
+  } else {
+    state.onboardingAction = { type: "generate", view: "planner", label: "Generate First Week" };
+  }
+  byId("onboardingAction").textContent = state.onboardingAction.label;
 }
 
 function renderScores(scores = {}) {
@@ -634,26 +767,32 @@ async function loadPreferences() {
 
 async function loadCommitments() {
   const commitments = await api("/commitments");
+  state.commitments = commitments;
   renderCommitments(commitments);
+  renderOnboarding();
 }
 
 async function loadGoogleStatus() {
   const status = await api("/integrations/google/status");
+  state.googleStatus = status;
   renderGoogleStatus(status);
   if (status.configured && status.connected) {
     const calendars = await api("/integrations/google/calendars");
     renderGoogleCalendars(calendars);
   }
+  renderOnboarding();
 }
 
 async function loadCanvasStatus() {
   const status = await api("/integrations/canvas/status");
+  state.canvasStatus = status;
   renderCanvasStatus(status);
   byId("canvasBaseUrl").value = status.base_url || byId("canvasBaseUrl").value;
   if (status.connected) {
     const courses = await api("/integrations/canvas/courses");
     renderCanvasCourses(courses);
   }
+  renderOnboarding();
 }
 
 async function loadProfileData() {
@@ -837,6 +976,14 @@ async function importCanvasAssignments() {
   setActiveView("tasks");
 }
 
+async function runOnboardingAction() {
+  if (state.onboardingAction.type === "generate") {
+    await generatePlan();
+    return;
+  }
+  setActiveView(state.onboardingAction.view);
+}
+
 function bindRoutes() {
   document.querySelectorAll("[data-route-link]").forEach((link) => {
     link.addEventListener("click", (event) => {
@@ -861,6 +1008,7 @@ function bindEvents() {
   byId("parseDump").addEventListener("click", () => parseBrainDump().catch(handleError));
   byId("generatePlan").addEventListener("click", () => generatePlan().catch(handleError));
   byId("generatePlanPrimary").addEventListener("click", () => generatePlan().catch(handleError));
+  byId("onboardingAction").addEventListener("click", () => runOnboardingAction().catch(handleError));
   byId("addCommitment").addEventListener("click", () => addCommitment().catch(handleError));
   byId("connectGoogleCalendar").addEventListener("click", () => connectGoogleCalendar().catch(handleError));
   byId("refreshGoogleStatus").addEventListener("click", () => loadGoogleStatus().catch(handleError));
@@ -892,6 +1040,13 @@ function bindEvents() {
     }
     deleteCommitment(button.dataset.deleteCommitment).catch(handleError);
   });
+  byId("setupChecklist").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-onboarding-route]");
+    if (!button) {
+      return;
+    }
+    setActiveView(button.dataset.onboardingRoute);
+  });
 }
 
 function handleError(error) {
@@ -911,6 +1066,7 @@ async function init() {
   renderCanvasImportSummary(null);
   renderGoogleCalendars([]);
   renderGoogleImportSummary(null);
+  renderOnboarding();
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
     episodes: 0,

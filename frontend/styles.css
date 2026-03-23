@@ -620,6 +620,38 @@ button.secondary {
   align-items: start;
 }
 
+.setup-step,
+.setup-step-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.setup-step {
+  align-items: start;
+}
+
+.step-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.step-status.done {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: rgba(36, 87, 62, 0.16);
+}
+
+.step-status.todo {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(136, 28, 44, 0.16);
+}
+
 .status-pill {
   padding: 6px 10px;
   border-radius: 999px;
@@ -717,7 +749,9 @@ button.secondary {
   }
 
   .summary-top,
-  .task-row {
+  .task-row,
+  .setup-step,
+  .setup-step-meta {
     display: grid;
   }
 
