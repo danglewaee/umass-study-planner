@@ -730,6 +730,51 @@ function renderPlan(plan, badgeMessage, tone = "good") {
   setPlanBadge(`${badgeMessage}${engineSuffix}`, tone);
 }
 
+function formatComparisonValue(value) {
+  return Number.isInteger(value) ? String(value) : Number(value).toFixed(2);
+}
+
+function renderEngineComparison(result) {
+  const highlights = result?.highlights || [];
+  renderList(
+    "engineComparisonHighlights",
+    highlights,
+    (highlight) => escapeHtml(highlight),
+    "Compare engines to see which planner handles the current week best."
+  );
+
+  const container = byId("engineComparisonGrid");
+  if (!result?.compared_engines?.length) {
+    container.innerHTML = '<div class="metric-card">No comparison yet. Run Compare Engines after loading tasks and commitments.</div>';
+    return;
+  }
+
+  container.innerHTML = result.compared_engines
+    .map((entry) => {
+      const recommended = entry.engine_name === result.recommended_engine;
+      return `
+        <article class="comparison-card ${recommended ? "recommended" : ""}">
+          <div class="comparison-card-head">
+            <div>
+              <span class="eyebrow">Planner Engine</span>
+              <h3>${escapeHtml(formatLabel(entry.engine_name))}</h3>
+            </div>
+            <span class="status-pill ${recommended ? "scheduled" : "pending"}">${recommended ? "Recommended" : "Compared"}</span>
+          </div>
+          <div class="comparison-metrics">
+            <div class="metric-card"><span>Scheduled</span><strong>${escapeHtml(entry.scheduled_tasks)}</strong></div>
+            <div class="metric-card"><span>Unscheduled</span><strong>${escapeHtml(entry.unscheduled_tasks)}</strong></div>
+            <div class="metric-card"><span>Overload Days</span><strong>${escapeHtml(entry.overload_days)}</strong></div>
+            <div class="metric-card"><span>Focus Alignment</span><strong>${escapeHtml(formatComparisonValue(entry.focus_alignment_pct))}%</strong></div>
+            <div class="metric-card"><span>Goal Progress</span><strong>${escapeHtml(formatComparisonValue(entry.goal_progress))}</strong></div>
+            <div class="metric-card"><span>Consistency</span><strong>${escapeHtml(formatComparisonValue(entry.consistency))}</strong></div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderRepairTaskContext() {
   const task = selectedRepairTask();
   const container = byId("repairTaskContext");
@@ -849,6 +894,15 @@ function collectPreferences() {
     max_deep_blocks_per_day: Number(byId("maxDeepBlocks").value || 3),
     break_minutes: Number(byId("breakMinutes").value || 15),
     preferred_block_minutes: Number(byId("blockMinutes").value || 90),
+  };
+}
+
+function collectPlannerPayload() {
+  return {
+    week_start: collectWeekStart(),
+    preferences: collectPreferences(),
+    strategy: byId("strategySelect").value || "stability_aware",
+    engine_name: byId("plannerEngineSelect").value || undefined,
   };
 }
 
@@ -976,17 +1030,28 @@ async function parseBrainDump() {
 }
 
 async function generatePlan() {
-  const payload = {
-    week_start: collectWeekStart(),
-    preferences: collectPreferences(),
-    strategy: byId("strategySelect").value || "stability_aware",
-    engine_name: byId("plannerEngineSelect").value || undefined,
-  };
+  const payload = collectPlannerPayload();
   const plan = await api("/planner/generate-week", {
     method: "POST",
     body: JSON.stringify(payload),
   });
   renderPlan(plan, `Generated with ${formatLabel(plan.strategy_used)}`, "good");
+  setActiveView("planner");
+}
+
+async function compareEngines() {
+  const plannerPayload = collectPlannerPayload();
+  const payload = {
+    week_start: plannerPayload.week_start,
+    preferences: plannerPayload.preferences,
+    strategy: plannerPayload.strategy,
+    engine_names: state.engines.length ? state.engines : [state.defaultEngine || "heuristic_v1"],
+  };
+  const result = await api("/planner/compare-engines", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  renderEngineComparison(result);
   setActiveView("planner");
 }
 
@@ -1167,6 +1232,7 @@ function bindEvents() {
   bindRoutes();
   byId("parseDump").addEventListener("click", () => parseBrainDump().catch(handleError));
   byId("generatePlan").addEventListener("click", () => generatePlan().catch(handleError));
+  byId("compareEngines").addEventListener("click", () => compareEngines().catch(handleError));
   byId("generatePlanPrimary").addEventListener("click", () => generatePlan().catch(handleError));
   byId("onboardingAction").addEventListener("click", () => runOnboardingAction().catch(handleError));
   byId("addCommitment").addEventListener("click", () => addCommitment().catch(handleError));
@@ -1196,11 +1262,13 @@ function bindEvents() {
   byId("profileId").addEventListener("change", () => {
     renderGoogleImportSummary(null);
     renderCanvasImportSummary(null);
+    renderEngineComparison(null);
     loadProfileData().catch(handleError);
   });
   byId("profileId").addEventListener("blur", () => {
     renderGoogleImportSummary(null);
     renderCanvasImportSummary(null);
+    renderEngineComparison(null);
     loadProfileData().catch(handleError);
   });
   byId("commitmentList").addEventListener("click", (event) => {
@@ -1254,6 +1322,7 @@ async function init() {
   renderRepairTaskContext();
   renderRepairStrategyCards();
   renderRepairPreview();
+  renderEngineComparison(null);
   renderRepairSummary({}, "strategy");
   renderSelectorSummary({
     episodes: 0,

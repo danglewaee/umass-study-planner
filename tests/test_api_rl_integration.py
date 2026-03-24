@@ -150,6 +150,28 @@ class ApiRepairSelectorTests(unittest.TestCase):
         self.assertEqual(payload["engine_used"], "ortools_cp_sat")
         self.assertIsNotNone(payload["metrics"])
 
+    def test_compare_engines_returns_recommendation_and_highlights(self) -> None:
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+
+        response = self.client.post(
+            "/planner/compare-engines",
+            json={
+                "week_start": week_start.isoformat(),
+                "strategy": "stability_aware",
+            },
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("recommended_engine", payload)
+        self.assertTrue(payload["highlights"])
+        self.assertGreaterEqual(len(payload["compared_engines"]), 1)
+        self.assertIn("heuristic_v1", [entry["engine_name"] for entry in payload["compared_engines"]])
+        if ortools_available():
+            self.assertIn("ortools_cp_sat", [entry["engine_name"] for entry in payload["compared_engines"]])
+
     def test_commitment_endpoints_round_trip(self) -> None:
         create_response = self.client.post(
             "/commitments",

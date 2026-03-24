@@ -222,6 +222,35 @@ class WeeklyPlanResponse(BaseModel):
     metrics: PlanMetrics | None = None
 
 
+class PlannerCompareRequest(BaseModel):
+    week_start: date
+    preferences: UserPreferences | None = None
+    strategy: PlanStrategy = PlanStrategy.stability_aware
+    engine_names: list[str] = Field(default_factory=list)
+
+
+class PlannerComparisonEntry(BaseModel):
+    engine_name: str
+    scheduled_tasks: int
+    unscheduled_tasks: int
+    preserved_blocks: int
+    overload_days: int
+    focus_alignment_pct: float
+    total_deep_work_minutes: int
+    goal_progress: float
+    consistency: float
+    balance: float
+    alert_count: int
+
+
+class PlannerCompareResponse(BaseModel):
+    week_start: date
+    strategy: PlanStrategy
+    recommended_engine: str
+    compared_engines: list[PlannerComparisonEntry]
+    highlights: list[str]
+
+
 class CheckInInput(BaseModel):
     energy_level: int = Field(ge=1, le=5)
     stress_level: int = Field(ge=1, le=5)

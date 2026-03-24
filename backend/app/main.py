@@ -27,6 +27,9 @@ from .models import (
     GoogleImportResponse,
     HealthResponse,
     PlanStrategy,
+    PlannerCompareRequest,
+    PlannerCompareResponse,
+    PlannerComparisonEntry,
     RepairEvaluationRequest,
     RLReplanResponse,
     RLTrainRequest,
@@ -447,6 +450,61 @@ def _run_planner(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _comparison_entry(plan: WeeklyPlanResponse) -> PlannerComparisonEntry:
+    metrics = plan.metrics
+    return PlannerComparisonEntry(
+        engine_name=plan.engine_used,
+        scheduled_tasks=metrics.scheduled_tasks if metrics else 0,
+        unscheduled_tasks=metrics.unscheduled_tasks if metrics else 0,
+        preserved_blocks=metrics.preserved_blocks if metrics else 0,
+        overload_days=metrics.overload_days if metrics else 0,
+        focus_alignment_pct=metrics.focus_alignment_pct if metrics else 0.0,
+        total_deep_work_minutes=metrics.total_deep_work_minutes if metrics else 0,
+        goal_progress=plan.score_summary.get("goal_progress", 0.0),
+        consistency=plan.score_summary.get("consistency", 0.0),
+        balance=plan.score_summary.get("balance", 0.0),
+        alert_count=len(plan.alerts),
+    )
+
+
+def _comparison_score(entry: PlannerComparisonEntry) -> float:
+    return (
+        (entry.goal_progress * 120.0)
+        + (entry.consistency * 70.0)
+        + (entry.balance * 70.0)
+        + (entry.focus_alignment_pct * 0.3)
+        + (entry.preserved_blocks * 4.0)
+        - (entry.unscheduled_tasks * 28.0)
+        - (entry.overload_days * 12.0)
+    )
+
+
+def _comparison_highlights(entries: list[PlannerComparisonEntry], recommended_engine: str) -> list[str]:
+    if not entries:
+        return ["No planner engines were available to compare."]
+    if len(entries) == 1:
+        only = entries[0]
+        return [f"Only {only.engine_name} is available in this environment, so no side-by-side comparison was run."]
+
+    highlights = [f"{recommended_engine} produced the strongest overall weekly plan on the current inputs."]
+    best_scheduled = max(entries, key=lambda item: (item.scheduled_tasks, -item.unscheduled_tasks))
+    if best_scheduled.engine_name != recommended_engine or best_scheduled.scheduled_tasks > 0:
+        highlights.append(
+            f"{best_scheduled.engine_name} scheduled {best_scheduled.scheduled_tasks} task(s) with {best_scheduled.unscheduled_tasks} left out."
+        )
+
+    lowest_overload = min(entries, key=lambda item: (item.overload_days, item.alert_count))
+    highlights.append(
+        f"{lowest_overload.engine_name} kept overload to {lowest_overload.overload_days} day(s)."
+    )
+
+    best_focus = max(entries, key=lambda item: item.focus_alignment_pct)
+    highlights.append(
+        f"{best_focus.engine_name} reached {best_focus.focus_alignment_pct}% focus alignment."
+    )
+    return highlights[:4]
+
+
 @app.post("/planner/generate-week", response_model=WeeklyPlanResponse)
 def generate_plan(
     payload: WeeklyPlanRequest,
@@ -462,6 +520,43 @@ def generate_plan(
         strategy=payload.strategy,
         commitments=store.list_commitments(profile_id),
         engine_name=payload.engine_name,
+    )
+
+
+@app.post("/planner/compare-engines", response_model=PlannerCompareResponse)
+def compare_engines(
+    payload: PlannerCompareRequest,
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+) -> PlannerCompareResponse:
+    preferences = payload.preferences or store.get_preferences(profile_id)
+    if payload.preferences:
+        store.set_preferences(payload.preferences, profile_id)
+
+    engine_names = payload.engine_names or available_planner_engines()
+    deduped_engines = list(dict.fromkeys(engine_names))
+    tasks = store.list_tasks(profile_id)
+    commitments = store.list_commitments(profile_id)
+
+    entries: list[PlannerComparisonEntry] = []
+    for engine_name in deduped_engines:
+        plan = _run_planner(
+            tasks,
+            payload.week_start,
+            preferences,
+            strategy=payload.strategy,
+            commitments=commitments,
+            engine_name=engine_name,
+        )
+        entries.append(_comparison_entry(plan))
+
+    ranked = sorted(entries, key=_comparison_score, reverse=True)
+    recommended_engine = ranked[0].engine_name if ranked else default_planner_engine().name
+    return PlannerCompareResponse(
+        week_start=payload.week_start,
+        strategy=payload.strategy,
+        recommended_engine=recommended_engine,
+        compared_engines=entries,
+        highlights=_comparison_highlights(entries, recommended_engine),
     )
 
 
