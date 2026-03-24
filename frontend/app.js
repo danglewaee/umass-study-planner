@@ -791,7 +791,7 @@ function renderRepairTaskContext() {
   container.innerHTML = `
     <strong>${escapeHtml(task.title)}</strong>
     <div class="task-meta"><small>${escapeHtml(formatLabel(task.category))} &middot; due ${escapeHtml(task.deadline)} &middot; ${escapeHtml(task.estimated_minutes)} min</small></div>
-    <div class="task-meta"><small>${escapeHtml(urgency)}${task.status === "delayed" ? " • already marked delayed" : ""}</small></div>
+    <div class="task-meta"><small>${escapeHtml(urgency)}${task.status === "delayed" ? " | already marked delayed" : ""}</small></div>
   `;
 }
 
