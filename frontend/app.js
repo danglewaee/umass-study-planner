@@ -7,6 +7,21 @@ const LABEL_OVERRIDES = {
   heuristic_v1: "Heuristic V1",
   ortools_cp_sat: "OR-Tools CP-SAT",
 };
+const ANALYTICS_EVENT_LABELS = {
+  app_session_started: "App session started",
+  auth_register: "Account created",
+  auth_login: "Signed in",
+  auth_logout: "Signed out",
+  task_created: "Task created",
+  task_updated: "Task updated",
+  task_deleted: "Task deleted",
+  plan_generated: "Weekly plan generated",
+  bounded_replan: "Bounded replan run",
+  rl_replan: "RL replan run",
+  google_commitments_imported: "Google commitments imported",
+  canvas_assignments_imported: "Canvas assignments imported",
+  checkin_submitted: "Check-in submitted",
+};
 const REPAIR_STRATEGY_META = {
   stability_aware: {
     title: "Protect What Still Works",
@@ -55,9 +70,11 @@ const state = {
   canvasStatus: null,
   googleCalendars: [],
   googleStatus: null,
+  analyticsSummary: null,
   activeView: DEFAULT_VIEW,
   onboardingAction: { type: "route", view: "planner", label: "Open Planner" },
   latestSavedPlan: null,
+  sessionTrackedKey: "",
 };
 
 function escapeHtml(value) {
@@ -92,6 +109,10 @@ function formatDateTimeLabel(value) {
     return "Not synced yet";
   }
   return new Date(value).toLocaleString();
+}
+
+function analyticsEventLabel(eventType) {
+  return ANALYTICS_EVENT_LABELS[eventType] || formatLabel(eventType || "event");
 }
 
 function repairMeta(strategy) {
@@ -148,6 +169,7 @@ function setSession(session) {
 function clearSession() {
   state.authToken = "";
   state.currentUser = null;
+  state.sessionTrackedKey = "";
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   renderAuthState();
 }
@@ -565,6 +587,76 @@ function renderCanvasImportSummary(summary) {
     rows,
     (row) => escapeHtml(row),
     "No Canvas import has been run for this profile yet."
+  );
+}
+
+function currentSessionKey() {
+  if (state.authToken && state.currentUser) {
+    return `auth:${state.currentUser.id}`;
+  }
+  return `demo:${byId("profileId").value.trim() || state.profileId || "demo-user"}`;
+}
+
+function renderAnalyticsSummary(summary) {
+  state.analyticsSummary = summary;
+  const stats = summary
+    ? [
+        ["Sessions", summary.session_starts],
+        ["Weekly Plans", summary.plan_generations],
+        ["Replans", summary.replan_runs],
+        ["Imports", summary.import_runs],
+        ["Task Events", summary.task_events],
+        ["Active Days", summary.active_days],
+      ]
+    : [];
+
+  byId("analyticsStats").innerHTML = stats.length
+    ? stats
+        .map(
+          ([label, value]) => `
+            <div class="overview-stat">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+            </div>
+          `
+        )
+        .join("")
+    : '<div class="overview-stat"><span>Usage</span><strong>No data yet</strong></div>';
+
+  const recentRows = summary?.recent_events?.map((event) => {
+    const detailParts = [];
+    if (event.metadata?.strategy) {
+      detailParts.push(`strategy ${formatLabel(event.metadata.strategy)}`);
+    }
+    if (event.metadata?.chosen_strategy) {
+      detailParts.push(`RL chose ${formatLabel(event.metadata.chosen_strategy)}`);
+    }
+    if (event.metadata?.course_name) {
+      detailParts.push(String(event.metadata.course_name));
+    }
+    if (event.metadata?.calendar_id) {
+      detailParts.push(String(event.metadata.calendar_id));
+    }
+    const detail = detailParts.length ? ` · ${detailParts.join(" · ")}` : "";
+    return `${analyticsEventLabel(event.event_type)} · ${formatDateTimeLabel(event.created_at)}${detail}`;
+  }) || [];
+
+  renderList(
+    "analyticsRecent",
+    recentRows,
+    (row) => escapeHtml(row),
+    "No beta usage events yet. Start a session, generate a week, or import data to build evidence."
+  );
+
+  const dailyRows = summary?.daily_activity?.map(
+    (point) =>
+      `${point.day}: ${point.total_events} event(s), ${point.plan_generations} plan(s), ${point.replan_runs} replan run(s)`
+  ) || [];
+  renderList(
+    "analyticsDaily",
+    dailyRows,
+    (row) => escapeHtml(row),
+    "Daily usage will appear here once the beta has real activity."
   );
 }
 
@@ -1141,6 +1233,11 @@ async function loadLatestPlan() {
   }
 }
 
+async function loadAnalyticsSummary() {
+  const summary = await api("/analytics/summary?days=14");
+  renderAnalyticsSummary(summary);
+}
+
 async function loadProfileData() {
   await Promise.all([
     loadTasks(),
@@ -1149,8 +1246,25 @@ async function loadProfileData() {
     loadPreferences(),
     loadGoogleStatus(),
     loadCanvasStatus(),
+    loadAnalyticsSummary(),
   ]);
   await loadLatestPlan();
+}
+
+async function trackSessionStart(force = false) {
+  const sessionKey = currentSessionKey();
+  if (!force && state.sessionTrackedKey === sessionKey) {
+    return;
+  }
+  await api("/analytics/session-start", {
+    method: "POST",
+    body: JSON.stringify({
+      source: "web_app",
+      entry_view: requestedView(),
+      authenticated: Boolean(state.authToken && state.currentUser),
+    }),
+  });
+  state.sessionTrackedKey = sessionKey;
 }
 
 async function bootstrapAuth() {
@@ -1184,7 +1298,9 @@ async function registerAccount() {
     skipAuth: true,
   });
   setSession(session);
+  state.sessionTrackedKey = "";
   byId("authPassword").value = "";
+  await trackSessionStart(true);
   await loadProfileData();
 }
 
@@ -1199,7 +1315,9 @@ async function loginAccount() {
     skipAuth: true,
   });
   setSession(session);
+  state.sessionTrackedKey = "";
   byId("authPassword").value = "";
+  await trackSessionStart(true);
   await loadProfileData();
 }
 
@@ -1211,6 +1329,7 @@ async function logoutAccount() {
   renderGoogleImportSummary(null);
   renderCanvasImportSummary(null);
   renderEngineComparison(null);
+  await trackSessionStart(true);
   await loadProfileData();
 }
 
@@ -1232,6 +1351,7 @@ async function generatePlan() {
     body: JSON.stringify(payload),
   });
   renderPlan(plan, `Generated with ${formatLabel(plan.strategy_used)}`, "good");
+  await loadAnalyticsSummary();
   setActiveView("planner");
 }
 
@@ -1259,6 +1379,7 @@ async function replanWithStrategy() {
   renderPlan(plan, `Replanned with ${formatLabel(plan.strategy_used)}`, "warning");
   renderRepairSummary(plan, "strategy");
   await loadTasks();
+  await loadAnalyticsSummary();
   setActiveView("repair");
 }
 
@@ -1271,6 +1392,7 @@ async function replanWithRL() {
   renderPlan(result.result, `RL selected ${formatLabel(result.chosen_strategy)}`, "accent");
   renderRepairSummary(result, "rl");
   await loadTasks();
+  await loadAnalyticsSummary();
   setActiveView("repair");
 }
 
@@ -1300,6 +1422,7 @@ async function submitCheckin() {
     body: JSON.stringify(payload),
   });
   renderInsights(insights);
+  await loadAnalyticsSummary();
   setActiveView("insights");
 }
 
@@ -1325,6 +1448,7 @@ async function saveTask() {
   }
   resetTaskForm();
   await loadTasks();
+  await loadAnalyticsSummary();
   setActiveView("tasks");
 }
 
@@ -1347,6 +1471,7 @@ async function updateTaskStatus(taskId, status) {
     }),
   });
   await loadTasks();
+  await loadAnalyticsSummary();
 }
 
 async function removeTask(taskId) {
@@ -1355,6 +1480,7 @@ async function removeTask(taskId) {
     resetTaskForm();
   }
   await loadTasks();
+  await loadAnalyticsSummary();
 }
 
 async function addCommitment() {
@@ -1398,6 +1524,7 @@ async function importGoogleCommitments() {
   });
   renderGoogleImportSummary(summary);
   await Promise.all([loadCommitments(), loadGoogleStatus()]);
+  await loadAnalyticsSummary();
   setActiveView("planner");
 }
 
@@ -1441,6 +1568,7 @@ async function importCanvasAssignments() {
   });
   renderCanvasImportSummary(summary);
   await Promise.all([loadTasks(), loadCanvasStatus()]);
+  await loadAnalyticsSummary();
   setActiveView("tasks");
 }
 
@@ -1511,13 +1639,19 @@ function bindEvents() {
     renderGoogleImportSummary(null);
     renderCanvasImportSummary(null);
     renderEngineComparison(null);
-    loadProfileData().catch(handleError);
+    state.sessionTrackedKey = "";
+    trackSessionStart(true)
+      .then(() => loadProfileData())
+      .catch(handleError);
   });
   byId("profileId").addEventListener("blur", () => {
     renderGoogleImportSummary(null);
     renderCanvasImportSummary(null);
     renderEngineComparison(null);
-    loadProfileData().catch(handleError);
+    state.sessionTrackedKey = "";
+    trackSessionStart(true)
+      .then(() => loadProfileData())
+      .catch(handleError);
   });
   byId("commitmentList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-delete-commitment]");
@@ -1591,6 +1725,7 @@ async function init() {
   renderGoogleCalendars([]);
   renderGoogleImportSummary(null);
   renderOnboarding();
+  renderAnalyticsSummary(null);
   resetTaskForm();
   renderRepairTaskContext();
   renderRepairStrategyCards();
@@ -1605,6 +1740,7 @@ async function init() {
     action_counts: {},
   });
   await bootstrapAuth().catch(handleError);
+  await trackSessionStart(true).catch(handleError);
   await Promise.all([loadStrategies(), loadProfileData()]).catch(handleError);
 }
 

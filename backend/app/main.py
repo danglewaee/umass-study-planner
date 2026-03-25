@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from ml.repair_selector import TrainedRepairSelector, evaluate_repair_selector, replan_with_selector, train_repair_selector
 from . import canvas, google_calendar
 from .models import (
+    AnalyticsSessionStartInput,
     AuthLoginInput,
     AuthSessionResponse,
     AuthStatusResponse,
@@ -45,6 +46,7 @@ from .models import (
     Task,
     TaskInput,
     TaskUpdateInput,
+    UsageAnalyticsSummary,
     UserInsights,
     UserPreferences,
     WeeklyPlanRequest,
@@ -105,6 +107,10 @@ def require_authenticated_user(authorization: Annotated[str | None, Header()] = 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session.")
     return user, token
+
+
+def _log_usage(profile_id: str, event_type: str, **metadata: object) -> None:
+    store.log_usage_event(profile_id, event_type, metadata=metadata)
 
 
 def _coerce_utc(value: datetime | None) -> datetime | None:
@@ -223,6 +229,7 @@ def register(payload: AuthRegisterInput) -> AuthSessionResponse:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     token, expires_at = store.create_session(user.id)
+    _log_usage(user.id, "auth_register", source="web_app")
     return AuthSessionResponse(token=token, expires_at=expires_at, user=user)
 
 
@@ -232,6 +239,7 @@ def login(payload: AuthLoginInput) -> AuthSessionResponse:
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     token, expires_at = store.create_session(user.id)
+    _log_usage(user.id, "auth_login", source="web_app")
     return AuthSessionResponse(token=token, expires_at=expires_at, user=user)
 
 
@@ -243,9 +251,33 @@ def auth_me(session=Depends(require_authenticated_user)) -> AuthStatusResponse:
 
 @app.post("/auth/logout", status_code=204)
 def logout(session=Depends(require_authenticated_user)) -> Response:
-    _, token = session
+    user, token = session
+    _log_usage(user.id, "auth_logout", source="web_app")
     store.delete_session(token)
     return Response(status_code=204)
+
+
+@app.post("/analytics/session-start", status_code=204)
+def analytics_session_start(
+    payload: AnalyticsSessionStartInput,
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+) -> Response:
+    _log_usage(
+        profile_id,
+        "app_session_started",
+        source=payload.source,
+        entry_view=payload.entry_view,
+        authenticated=payload.authenticated,
+    )
+    return Response(status_code=204)
+
+
+@app.get("/analytics/summary", response_model=UsageAnalyticsSummary)
+def analytics_summary(
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+    days: int = 14,
+) -> UsageAnalyticsSummary:
+    return store.get_usage_summary(profile_id, window_days=days)
 
 
 @app.get("/integrations/google/status", response_model=GoogleConnectionStatus)
@@ -355,7 +387,7 @@ def import_google_commitments(
             updated_commitments += 1
 
     store.touch_google_sync(profile_id)
-    return GoogleImportResponse(
+    response = GoogleImportResponse(
         calendar_id=payload.calendar_id,
         imported_commitments=imported_commitments,
         updated_commitments=updated_commitments,
@@ -366,6 +398,15 @@ def import_google_commitments(
             "One-off or all-day events were skipped by design."
         ),
     )
+    _log_usage(
+        profile_id,
+        "google_commitments_imported",
+        calendar_id=payload.calendar_id,
+        imported_commitments=imported_commitments,
+        updated_commitments=updated_commitments,
+        skipped_events=skipped_events,
+    )
+    return response
 
 
 @app.delete("/integrations/google/connection", status_code=204)
@@ -444,7 +485,7 @@ def import_canvas_assignments(
             updated_tasks += 1
 
     store.touch_canvas_sync(profile_id)
-    return CanvasImportResponse(
+    response = CanvasImportResponse(
         course_id=payload.course_id,
         course_name=course_name,
         imported_tasks=imported_tasks,
@@ -453,6 +494,16 @@ def import_canvas_assignments(
         imported_titles=sorted(set(imported_titles)),
         message="Imported Canvas assignments with due dates into academic tasks.",
     )
+    _log_usage(
+        profile_id,
+        "canvas_assignments_imported",
+        course_id=payload.course_id,
+        course_name=course_name,
+        imported_tasks=imported_tasks,
+        updated_tasks=updated_tasks,
+        skipped_assignments=skipped_assignments,
+    )
+    return response
 
 
 @app.delete("/integrations/canvas/connection", status_code=204)
@@ -468,7 +519,9 @@ def list_tasks(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> list[
 
 @app.post("/tasks", response_model=Task, status_code=201)
 def create_task(payload: TaskInput, profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Task:
-    return store.add_task(payload, profile_id)
+    task = store.add_task(payload, profile_id)
+    _log_usage(profile_id, "task_created", task_id=task.id, category=task.category.value, priority=task.priority)
+    return task
 
 
 @app.put("/tasks/{task_id}", response_model=Task)
@@ -480,6 +533,7 @@ def update_task(
     updated = store.update_task(task_id, payload, profile_id)
     if not updated:
         raise HTTPException(status_code=404, detail="Task not found")
+    _log_usage(profile_id, "task_updated", task_id=updated.id, status=updated.status.value, category=updated.category.value)
     return updated
 
 
@@ -488,6 +542,7 @@ def delete_task(task_id: str, profile_id: Annotated[str, Depends(resolve_profile
     deleted = store.delete_task(task_id, profile_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Task not found")
+    _log_usage(profile_id, "task_deleted", task_id=task_id)
     return Response(status_code=204)
 
 
@@ -641,6 +696,15 @@ def generate_plan(
         commitments=store.list_commitments(profile_id),
         engine_name=payload.engine_name,
     )
+    _log_usage(
+        profile_id,
+        "plan_generated",
+        week_start=payload.week_start.isoformat(),
+        strategy=plan.strategy_used.value,
+        engine_used=plan.engine_used,
+        scheduled_tasks=plan.metrics.scheduled_tasks if plan.metrics else 0,
+        unscheduled_tasks=plan.metrics.unscheduled_tasks if plan.metrics else 0,
+    )
     return _persist_plan(plan, profile_id, source_action="generate_week")
 
 
@@ -710,6 +774,15 @@ def replan(
         engine_name=payload.engine_name,
     )
     plan.alerts.append(f"Replanned after delay: {payload.reason}")
+    _log_usage(
+        profile_id,
+        "bounded_replan",
+        week_start=payload.week_start.isoformat(),
+        reason=payload.reason,
+        strategy=plan.strategy_used.value,
+        engine_used=plan.engine_used,
+        delayed_task_id=payload.task_id,
+    )
     return _persist_plan(plan, profile_id, source_action="bounded_replan")
 
 
@@ -756,6 +829,15 @@ def replan_with_rl(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     result.alerts.append(f"RL-selected repair strategy '{chosen.value}' after delay: {payload.reason}")
+    _log_usage(
+        profile_id,
+        "rl_replan",
+        week_start=payload.week_start.isoformat(),
+        reason=payload.reason,
+        chosen_strategy=chosen.value,
+        engine_used=result.engine_used,
+        delayed_task_id=payload.task_id,
+    )
     saved = _persist_plan(result, profile_id, source_action="rl_replan")
     return RLReplanResponse(chosen_strategy=chosen, encoded_state=state, result=saved)
 
@@ -775,6 +857,13 @@ def create_check_in(
     profile_id: Annotated[str, Depends(resolve_profile_id)],
 ) -> UserInsights:
     store.add_check_in(payload, profile_id)
+    _log_usage(
+        profile_id,
+        "checkin_submitted",
+        energy_level=payload.energy_level,
+        stress_level=payload.stress_level,
+        confidence_level=payload.confidence_level,
+    )
     return derive_user_insights(store.list_tasks(profile_id), payload.stress_level)
 
 

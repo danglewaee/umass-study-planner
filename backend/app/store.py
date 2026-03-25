@@ -22,6 +22,9 @@ from .models import (
     Task,
     TaskInput,
     TaskUpdateInput,
+    UsageAnalyticsSummary,
+    UsageDailyPoint,
+    UsageEventRecord,
     UserPreferences,
     WeeklyPlanResponse,
 )
@@ -176,6 +179,14 @@ class SQLiteStore:
                     UNIQUE(profile_id, week_start)
                 );
 
+                CREATE TABLE IF NOT EXISTS usage_events (
+                    id TEXT PRIMARY KEY,
+                    profile_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
                 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id, expires_at);
                 CREATE INDEX IF NOT EXISTS idx_tasks_profile_deadline ON tasks (profile_id, deadline);
@@ -185,6 +196,8 @@ class SQLiteStore:
                 CREATE INDEX IF NOT EXISTS idx_commitment_sources_profile ON commitment_sources (profile_id, provider, calendar_id);
                 CREATE INDEX IF NOT EXISTS idx_oauth_states_provider ON oauth_states (provider, created_at);
                 CREATE INDEX IF NOT EXISTS idx_saved_plans_profile_updated ON saved_plans (profile_id, updated_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_usage_events_profile_created ON usage_events (profile_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_usage_events_profile_type ON usage_events (profile_id, event_type, created_at DESC);
                 """
             )
 
@@ -279,10 +292,124 @@ class SQLiteStore:
             connection.execute("DELETE FROM canvas_connections WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM oauth_states WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM saved_plans WHERE profile_id = ?", (normalized,))
+            connection.execute("DELETE FROM usage_events WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM tasks WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM check_ins WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM commitments WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM preferences WHERE profile_id = ?", (normalized,))
+
+    def log_usage_event(
+        self,
+        profile_id: str,
+        event_type: str,
+        *,
+        metadata: dict[str, object] | None = None,
+    ) -> UsageEventRecord:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        record = UsageEventRecord(
+            event_type=event_type,
+            created_at=datetime.utcnow(),
+            metadata=metadata or {},
+        )
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO usage_events (id, profile_id, event_type, metadata_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    normalized,
+                    record.event_type,
+                    json.dumps(record.metadata),
+                    record.created_at.isoformat(),
+                ),
+            )
+        return record
+
+    def get_usage_summary(self, profile_id: str, *, window_days: int = 14) -> UsageAnalyticsSummary:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        bounded_window = max(1, min(window_days, 90))
+        window_start = (datetime.utcnow() - timedelta(days=bounded_window - 1)).date().isoformat()
+
+        with self._connect() as connection:
+            aggregate = connection.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_events,
+                    SUM(CASE WHEN event_type = 'app_session_started' THEN 1 ELSE 0 END) AS session_starts,
+                    SUM(CASE WHEN event_type = 'plan_generated' THEN 1 ELSE 0 END) AS plan_generations,
+                    SUM(CASE WHEN event_type IN ('bounded_replan', 'rl_replan') THEN 1 ELSE 0 END) AS replan_runs,
+                    SUM(CASE WHEN event_type IN ('task_created', 'task_updated', 'task_deleted') THEN 1 ELSE 0 END) AS task_events,
+                    SUM(CASE WHEN event_type IN ('google_commitments_imported', 'canvas_assignments_imported') THEN 1 ELSE 0 END) AS import_runs,
+                    COUNT(DISTINCT substr(created_at, 1, 10)) AS active_days,
+                    MAX(created_at) AS last_active_at
+                FROM usage_events
+                WHERE profile_id = ? AND substr(created_at, 1, 10) >= ?
+                """,
+                (normalized, window_start),
+            ).fetchone()
+
+            recent_rows = connection.execute(
+                """
+                SELECT event_type, metadata_json, created_at
+                FROM usage_events
+                WHERE profile_id = ? AND substr(created_at, 1, 10) >= ?
+                ORDER BY created_at DESC
+                LIMIT 8
+                """,
+                (normalized, window_start),
+            ).fetchall()
+
+            daily_rows = connection.execute(
+                """
+                SELECT
+                    substr(created_at, 1, 10) AS day,
+                    COUNT(*) AS total_events,
+                    SUM(CASE WHEN event_type = 'plan_generated' THEN 1 ELSE 0 END) AS plan_generations,
+                    SUM(CASE WHEN event_type IN ('bounded_replan', 'rl_replan') THEN 1 ELSE 0 END) AS replan_runs
+                FROM usage_events
+                WHERE profile_id = ? AND substr(created_at, 1, 10) >= ?
+                GROUP BY substr(created_at, 1, 10)
+                ORDER BY day DESC
+                LIMIT 14
+                """,
+                (normalized, window_start),
+            ).fetchall()
+
+        recent_events = [
+            UsageEventRecord(
+                event_type=row["event_type"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                metadata=json.loads(row["metadata_json"] or "{}"),
+            )
+            for row in recent_rows
+        ]
+        daily_activity = [
+            UsageDailyPoint(
+                day=row["day"],
+                total_events=row["total_events"] or 0,
+                plan_generations=row["plan_generations"] or 0,
+                replan_runs=row["replan_runs"] or 0,
+            )
+            for row in daily_rows
+        ]
+        return UsageAnalyticsSummary(
+            profile_id=normalized,
+            window_days=bounded_window,
+            total_events=aggregate["total_events"] or 0,
+            session_starts=aggregate["session_starts"] or 0,
+            plan_generations=aggregate["plan_generations"] or 0,
+            replan_runs=aggregate["replan_runs"] or 0,
+            task_events=aggregate["task_events"] or 0,
+            import_runs=aggregate["import_runs"] or 0,
+            active_days=aggregate["active_days"] or 0,
+            last_active_at=datetime.fromisoformat(aggregate["last_active_at"]) if aggregate["last_active_at"] else None,
+            recent_events=recent_events,
+            daily_activity=daily_activity,
+        )
 
     def create_user(self, email: str, password: str, full_name: str) -> AuthUser:
         normalized_email = self._normalize_email(email)

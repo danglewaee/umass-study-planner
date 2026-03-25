@@ -262,6 +262,40 @@ class SavedPlanResponse(BaseModel):
     plan: WeeklyPlanResponse
 
 
+class AnalyticsSessionStartInput(BaseModel):
+    source: str = Field(default="web_app", max_length=80)
+    entry_view: str = Field(default="overview", max_length=80)
+    authenticated: bool = False
+
+
+class UsageEventRecord(BaseModel):
+    event_type: str
+    created_at: datetime
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class UsageDailyPoint(BaseModel):
+    day: date
+    total_events: int
+    plan_generations: int = 0
+    replan_runs: int = 0
+
+
+class UsageAnalyticsSummary(BaseModel):
+    profile_id: str
+    window_days: int
+    total_events: int = 0
+    session_starts: int = 0
+    plan_generations: int = 0
+    replan_runs: int = 0
+    task_events: int = 0
+    import_runs: int = 0
+    active_days: int = 0
+    last_active_at: datetime | None = None
+    recent_events: list[UsageEventRecord] = Field(default_factory=list)
+    daily_activity: list[UsageDailyPoint] = Field(default_factory=list)
+
+
 class PlannerCompareRequest(BaseModel):
     week_start: date
     preferences: UserPreferences | None = None

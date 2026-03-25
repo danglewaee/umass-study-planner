@@ -147,6 +147,70 @@ class AuthAndBetaFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("UMass Study Partner", response.text)
 
+    def test_analytics_summary_tracks_beta_activity(self) -> None:
+        headers = self._auth_headers()
+        week_start = date.today() - timedelta(days=date.today().weekday())
+
+        session_response = self.client.post(
+            "/analytics/session-start",
+            json={
+                "source": "web_app",
+                "entry_view": "overview",
+                "authenticated": True,
+            },
+            headers=headers,
+        )
+        self.assertEqual(session_response.status_code, 204)
+
+        create_response = self.client.post(
+            "/tasks",
+            json={
+                "title": "Pilot analytics task",
+                "description": "Need real usage evidence.",
+                "category": "academics",
+                "deadline": (week_start + timedelta(days=1)).isoformat(),
+                "estimated_minutes": 90,
+                "difficulty": 3,
+                "priority": 4,
+            },
+            headers=headers,
+        )
+        self.assertEqual(create_response.status_code, 201)
+        task_id = create_response.json()["id"]
+
+        generate_response = self.client.post(
+            "/planner/generate-week",
+            json={
+                "week_start": week_start.isoformat(),
+                "strategy": "stability_aware",
+            },
+            headers=headers,
+        )
+        self.assertEqual(generate_response.status_code, 200)
+
+        replan_response = self.client.post(
+            "/planner/replan",
+            json={
+                "task_id": task_id,
+                "week_start": week_start.isoformat(),
+                "reason": "Pilot user slipped one block.",
+            },
+            headers=headers,
+        )
+        self.assertEqual(replan_response.status_code, 200)
+
+        summary_response = self.client.get("/analytics/summary?days=14", headers=headers)
+        self.assertEqual(summary_response.status_code, 200)
+        payload = summary_response.json()
+        self.assertEqual(payload["session_starts"], 1)
+        self.assertEqual(payload["plan_generations"], 1)
+        self.assertEqual(payload["replan_runs"], 1)
+        self.assertGreaterEqual(payload["task_events"], 1)
+        self.assertGreaterEqual(payload["total_events"], 4)
+        self.assertGreaterEqual(payload["active_days"], 1)
+        self.assertTrue(payload["recent_events"])
+        self.assertIn("app_session_started", [event["event_type"] for event in payload["recent_events"]])
+
 
 if __name__ == "__main__":
     unittest.main()

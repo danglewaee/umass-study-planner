@@ -27,6 +27,7 @@ Important:
 - Registers users, creates session tokens, and scopes planner data to authenticated accounts
 - Saves the latest weekly plan for a student account so a generated week survives refreshes
 - Supports manual task CRUD for beta users who have not connected external systems yet
+- Logs beta usage events such as session starts, task activity, imports, plan generation, and replanning
 - Parses brain-dump text into candidate tasks
 - Stores recurring fixed commitments such as classes, work shifts, clubs, and commute blocks
 - Supports account-scoped Google Calendar connection state and recurring event import into fixed commitments
@@ -115,6 +116,7 @@ Current import behavior:
 - weekly plan generation and bounded replanning
 - Google Calendar recurring-event import
 - Canvas assignment import
+- lightweight usage logging for beta evidence
 - dashboard served directly from FastAPI at `/`
 
 This is a reasonable private beta shape.
