@@ -32,12 +32,40 @@
           <a href="#insights" data-route-link="insights">Insights</a>
         </nav>
 
-        <input id="apiBase" type="hidden" value="http://127.0.0.1:8000" />
+        <input id="apiBase" type="hidden" value="" />
 
         <section class="sidebar-card">
-          <label for="profileId">Student Profile</label>
+          <p class="eyebrow">Account</p>
+          <h2 class="sidebar-card-title">Private beta access</h2>
+          <div id="authStatus" class="integration-status neutral">
+            Create an account or sign in to keep your planner private and persistent.
+          </div>
+          <div class="form-grid compact-form-grid auth-form-grid">
+            <label>
+              Full Name
+              <input id="authFullName" placeholder="Jamie Chen" />
+            </label>
+            <label>
+              Email
+              <input id="authEmail" type="email" placeholder="you@umass.edu" />
+            </label>
+            <label>
+              Password
+              <input id="authPassword" type="password" placeholder="At least 8 characters" />
+            </label>
+          </div>
+          <div class="sidebar-actions">
+            <button id="registerButton">Create Account</button>
+            <button id="loginButton" class="secondary">Sign In</button>
+            <button id="logoutButton" class="secondary is-hidden">Sign Out</button>
+          </div>
+          <p id="authIdentity" class="sidebar-label">No account session yet.</p>
+        </section>
+
+        <section id="demoProfileCard" class="sidebar-card sidebar-card-muted">
+          <label for="profileId">Local Demo Profile</label>
           <input id="profileId" value="demo-user" />
-          <p class="sidebar-label">Switch the profile id to simulate a different student's schedule and commitments.</p>
+          <p class="sidebar-label">Only used when no account session is active. Useful for local demos and seeded test data.</p>
         </section>
 
         <section class="sidebar-card sidebar-card-emphasis">
@@ -457,6 +485,82 @@
                 <button id="importCanvasAssignments" class="secondary">Import Assignments</button>
               </div>
               <div id="canvasImportSummary" class="list"></div>
+            </section>
+          </section>
+
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Manual Input</p>
+                  <h2>Add Or Edit A Task</h2>
+                  <p class="module-subtitle">Keep beta users unblocked even when Canvas import is incomplete.</p>
+                </div>
+              </div>
+              <input id="editingTaskId" type="hidden" value="" />
+              <div class="form-grid">
+                <label>
+                  Title
+                  <input id="taskTitle" placeholder="Finish algorithms problem set" />
+                </label>
+                <label>
+                  Category
+                  <select id="taskCategory">
+                    <option value="academics">Academics</option>
+                    <option value="recruiting">Recruiting</option>
+                    <option value="personal">Personal</option>
+                    <option value="health">Health</option>
+                  </select>
+                </label>
+                <label class="form-span-2">
+                  Description
+                  <textarea id="taskDescription" rows="3" placeholder="What matters most about this task?"></textarea>
+                </label>
+                <label>
+                  Deadline
+                  <input id="taskDeadline" type="date" />
+                </label>
+                <label>
+                  Estimated Minutes
+                  <input id="taskMinutes" type="number" min="15" max="720" value="90" />
+                </label>
+                <label>
+                  Difficulty
+                  <input id="taskDifficulty" type="number" min="1" max="5" value="3" />
+                </label>
+                <label>
+                  Priority
+                  <input id="taskPriority" type="number" min="1" max="5" value="3" />
+                </label>
+                <label>
+                  Status
+                  <select id="taskStatus">
+                    <option value="pending">Pending</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="completed">Completed</option>
+                    <option value="delayed">Delayed</option>
+                  </select>
+                </label>
+              </div>
+              <div class="toolbar">
+                <button id="saveTask">Save Task</button>
+                <button id="resetTaskForm" class="secondary">Clear Form</button>
+              </div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Beta Readiness</p>
+                  <h2>What This Unlocks</h2>
+                  <p class="module-subtitle">Manual task input makes the private beta usable even before every user connects external tools.</p>
+                </div>
+              </div>
+              <div class="list compact-list">
+                <div class="item">Students can start with deadlines and effort estimates on day one.</div>
+                <div class="item">You can pilot bounded replanning even when Canvas access is missing.</div>
+                <div class="item">The deployable story stays focused on student workflow, not integration setup.</div>
+              </div>
             </section>
           </section>
 

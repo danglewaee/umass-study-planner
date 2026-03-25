@@ -1,20 +1,28 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import secrets
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 from .models import (
+    AuthUser,
     CanvasConnection,
     CheckIn,
     CheckInInput,
     FixedCommitment,
     FixedCommitmentInput,
     GoogleConnection,
+    SavedPlanResponse,
     Task,
     TaskInput,
+    TaskUpdateInput,
     UserPreferences,
+    WeeklyPlanResponse,
 )
 
 DEFAULT_PROFILE_ID = "demo-user"
@@ -46,6 +54,23 @@ class SQLiteStore:
                     max_deep_blocks_per_day INTEGER NOT NULL,
                     break_minutes INTEGER NOT NULL,
                     preferred_block_minutes INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    full_name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES users(id)
                 );
 
                 CREATE TABLE IF NOT EXISTS tasks (
@@ -133,12 +158,26 @@ class SQLiteStore:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS saved_plans (
+                    id TEXT PRIMARY KEY,
+                    profile_id TEXT NOT NULL,
+                    week_start TEXT NOT NULL,
+                    source_action TEXT NOT NULL,
+                    plan_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(profile_id, week_start)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+                CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id, expires_at);
                 CREATE INDEX IF NOT EXISTS idx_tasks_profile_deadline ON tasks (profile_id, deadline);
                 CREATE INDEX IF NOT EXISTS idx_task_sources_profile ON task_sources (profile_id, provider, scope_id);
                 CREATE INDEX IF NOT EXISTS idx_checkins_profile_created ON check_ins (profile_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_commitments_profile_day ON commitments (profile_id, day_of_week, start);
                 CREATE INDEX IF NOT EXISTS idx_commitment_sources_profile ON commitment_sources (profile_id, provider, calendar_id);
                 CREATE INDEX IF NOT EXISTS idx_oauth_states_provider ON oauth_states (provider, created_at);
+                CREATE INDEX IF NOT EXISTS idx_saved_plans_profile_updated ON saved_plans (profile_id, updated_at DESC);
                 """
             )
 
@@ -205,6 +244,25 @@ class SQLiteStore:
     def _normalize_profile_id(self, profile_id: str | None) -> str:
         return (profile_id or DEFAULT_PROFILE_ID).strip() or DEFAULT_PROFILE_ID
 
+    def _normalize_email(self, email: str) -> str:
+        return email.strip().lower()
+
+    def _hash_password(self, password: str, salt: bytes | None = None) -> str:
+        effective_salt = salt or secrets.token_bytes(16)
+        derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), effective_salt, 120_000)
+        return f"{effective_salt.hex()}:{derived.hex()}"
+
+    def _verify_password(self, password: str, encoded: str) -> bool:
+        salt_hex, digest_hex = encoded.split(":", 1)
+        candidate = self._hash_password(password, bytes.fromhex(salt_hex))
+        return hmac.compare_digest(candidate, f"{salt_hex}:{digest_hex}")
+
+    def _hash_session_token(self, token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def _user_from_row(self, row: sqlite3.Row | None) -> AuthUser | None:
+        return AuthUser.model_validate(dict(row)) if row else None
+
     def clear_profile(self, profile_id: str) -> None:
         normalized = self._normalize_profile_id(profile_id)
         with self._connect() as connection:
@@ -213,10 +271,123 @@ class SQLiteStore:
             connection.execute("DELETE FROM google_connections WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM canvas_connections WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM oauth_states WHERE profile_id = ?", (normalized,))
+            connection.execute("DELETE FROM saved_plans WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM tasks WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM check_ins WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM commitments WHERE profile_id = ?", (normalized,))
             connection.execute("DELETE FROM preferences WHERE profile_id = ?", (normalized,))
+
+    def create_user(self, email: str, password: str, full_name: str) -> AuthUser:
+        normalized_email = self._normalize_email(email)
+        now = datetime.utcnow().isoformat()
+        user = AuthUser(
+            id=str(uuid4()),
+            email=normalized_email,
+            full_name=full_name.strip(),
+            created_at=datetime.utcnow(),
+        )
+        with self._connect() as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO users (id, email, password_hash, full_name, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        user.id,
+                        normalized_email,
+                        self._hash_password(password),
+                        user.full_name,
+                        now,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("An account with this email already exists.") from exc
+        self._ensure_profile(user.id)
+        return user
+
+    def get_user(self, user_id: str) -> AuthUser | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT id, email, full_name, created_at FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        return self._user_from_row(row)
+
+    def get_user_by_email(self, email: str) -> AuthUser | None:
+        normalized_email = self._normalize_email(email)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT id, email, full_name, created_at FROM users WHERE email = ?",
+                (normalized_email,),
+            ).fetchone()
+        return self._user_from_row(row)
+
+    def authenticate_user(self, email: str, password: str) -> AuthUser | None:
+        normalized_email = self._normalize_email(email)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT id, email, password_hash, full_name, created_at FROM users WHERE email = ?",
+                (normalized_email,),
+            ).fetchone()
+        if not row or not self._verify_password(password, row["password_hash"]):
+            return None
+        return AuthUser.model_validate(
+            {
+                "id": row["id"],
+                "email": row["email"],
+                "full_name": row["full_name"],
+                "created_at": row["created_at"],
+            }
+        )
+
+    def create_session(self, user_id: str, *, duration_days: int = 14) -> tuple[str, datetime]:
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(days=duration_days)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    self._hash_session_token(token),
+                    user_id,
+                    datetime.utcnow().isoformat(),
+                    expires_at.isoformat(),
+                ),
+            )
+        return token, expires_at
+
+    def get_user_by_session_token(self, token: str) -> AuthUser | None:
+        token_hash = self._hash_session_token(token)
+        now = datetime.utcnow().isoformat()
+        with self._connect() as connection:
+            connection.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
+            row = connection.execute(
+                """
+                SELECT u.id, u.email, u.full_name, u.created_at
+                FROM sessions s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.token_hash = ? AND s.expires_at > ?
+                """,
+                (token_hash, now),
+            ).fetchone()
+        return self._user_from_row(row)
+
+    def delete_session(self, token: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM sessions WHERE token_hash = ?",
+                (self._hash_session_token(token),),
+            )
+
+    def clear_user_account(self, user_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        self.clear_profile(user_id)
 
     def add_task(self, payload: TaskInput, profile_id: str = DEFAULT_PROFILE_ID) -> Task:
         normalized = self._normalize_profile_id(profile_id)
@@ -280,6 +451,52 @@ class SQLiteStore:
                 (task_id, normalized),
             ).fetchone()
         return Task.model_validate(dict(row)) if row else None
+
+    def update_task(
+        self,
+        task_id: str,
+        payload: TaskUpdateInput,
+        profile_id: str = DEFAULT_PROFILE_ID,
+    ) -> Task | None:
+        normalized = self._normalize_profile_id(profile_id)
+        record = payload.model_dump(mode="json")
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE tasks
+                SET title = ?, description = ?, category = ?, deadline = ?, estimated_minutes = ?,
+                    difficulty = ?, priority = ?, status = ?
+                WHERE id = ? AND profile_id = ?
+                """,
+                (
+                    record["title"],
+                    record["description"],
+                    record["category"],
+                    record["deadline"],
+                    record["estimated_minutes"],
+                    record["difficulty"],
+                    record["priority"],
+                    record["status"],
+                    task_id,
+                    normalized,
+                ),
+            )
+            if cursor.rowcount == 0:
+                return None
+        return self.get_task(task_id, normalized)
+
+    def delete_task(self, task_id: str, profile_id: str = DEFAULT_PROFILE_ID) -> bool:
+        normalized = self._normalize_profile_id(profile_id)
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM task_sources WHERE task_id = ? AND profile_id = ?",
+                (task_id, normalized),
+            )
+            cursor = connection.execute(
+                "DELETE FROM tasks WHERE id = ? AND profile_id = ?",
+                (task_id, normalized),
+            )
+        return cursor.rowcount > 0
 
     def upsert_canvas_task(
         self,
@@ -792,6 +1009,85 @@ class SQLiteStore:
                 (normalized,),
             ).fetchone()
         return CanvasConnection.model_validate(dict(row)) if row else None
+
+    def save_weekly_plan(
+        self,
+        plan: WeeklyPlanResponse,
+        profile_id: str = DEFAULT_PROFILE_ID,
+        *,
+        source_action: str,
+    ) -> SavedPlanResponse:
+        normalized = self._normalize_profile_id(profile_id)
+        self._ensure_profile(normalized)
+        now = datetime.utcnow().isoformat()
+        payload = plan.model_dump(mode="json")
+        plan_id = str(uuid4())
+        with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT id, created_at FROM saved_plans WHERE profile_id = ? AND week_start = ?",
+                (normalized, payload["week_start"]),
+            ).fetchone()
+            connection.execute(
+                """
+                INSERT INTO saved_plans (id, profile_id, week_start, source_action, plan_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(profile_id, week_start) DO UPDATE SET
+                    source_action = excluded.source_action,
+                    plan_json = excluded.plan_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    existing["id"] if existing else plan_id,
+                    normalized,
+                    payload["week_start"],
+                    source_action,
+                    json.dumps(payload),
+                    existing["created_at"] if existing else now,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT id, source_action, plan_json, updated_at
+                FROM saved_plans
+                WHERE profile_id = ? AND week_start = ?
+                """,
+                (normalized, payload["week_start"]),
+            ).fetchone()
+        return SavedPlanResponse(
+            id=row["id"],
+            source_action=row["source_action"],
+            saved_at=datetime.fromisoformat(row["updated_at"]),
+            plan=WeeklyPlanResponse.model_validate(json.loads(row["plan_json"])),
+        )
+
+    def get_latest_saved_plan(
+        self,
+        profile_id: str = DEFAULT_PROFILE_ID,
+        *,
+        week_start: str | None = None,
+    ) -> SavedPlanResponse | None:
+        normalized = self._normalize_profile_id(profile_id)
+        query = """
+            SELECT id, source_action, plan_json, updated_at
+            FROM saved_plans
+            WHERE profile_id = ?
+        """
+        params: list[str] = [normalized]
+        if week_start:
+            query += " AND week_start = ?"
+            params.append(week_start)
+        query += " ORDER BY updated_at DESC LIMIT 1"
+        with self._connect() as connection:
+            row = connection.execute(query, tuple(params)).fetchone()
+        if not row:
+            return None
+        return SavedPlanResponse(
+            id=row["id"],
+            source_action=row["source_action"],
+            saved_at=datetime.fromisoformat(row["updated_at"]),
+            plan=WeeklyPlanResponse.model_validate(json.loads(row["plan_json"])),
+        )
 
     def get_preferences(self, profile_id: str = DEFAULT_PROFILE_ID) -> UserPreferences:
         normalized = self._normalize_profile_id(profile_id)

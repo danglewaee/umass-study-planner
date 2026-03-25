@@ -866,6 +866,45 @@ button.secondary {
   border-color: rgba(36, 87, 62, 0.16);
 }
 
+.sidebar-card-title {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.compact-form-grid {
+  gap: 12px;
+}
+
+.auth-form-grid {
+  margin-top: 10px;
+}
+
+.sidebar-card-muted {
+  background: rgba(255, 245, 240, 0.04);
+  border-style: dashed;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.form-span-2 {
+  grid-column: span 2;
+}
+
+.form-span-2 textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .sticky-module {
   position: sticky;
   top: 24px;
@@ -933,6 +972,10 @@ button.secondary {
   }
 
   .wide-field {
+    grid-column: span 1;
+  }
+
+  .form-span-2 {
     grid-column: span 1;
   }
 

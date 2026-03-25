@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from ml.repair_selector import TrainedRepairSelector, evaluate_repair_selector, replan_with_selector, train_repair_selector
 from . import canvas, google_calendar
 from .models import (
+    AuthLoginInput,
+    AuthSessionResponse,
+    AuthStatusResponse,
+    AuthRegisterInput,
     BrainDumpRequest,
     BrainDumpResponse,
     CanvasConnectionInput,
@@ -35,8 +41,10 @@ from .models import (
     RLTrainRequest,
     RLTrainResponse,
     ReplanRequest,
+    SavedPlanResponse,
     Task,
     TaskInput,
+    TaskUpdateInput,
     UserInsights,
     UserPreferences,
     WeeklyPlanRequest,
@@ -53,6 +61,7 @@ from .store import DEFAULT_PROFILE_ID, store
 
 app = FastAPI(title="UMass Study Partner API", version="0.1.0")
 trained_selector: TrainedRepairSelector | None = None
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,9 +71,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+if FRONTEND_DIR.exists():
+    app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="frontend")
 
-def resolve_profile_id(x_profile_id: Annotated[str | None, Header()] = None) -> str:
+
+def _extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return token.strip()
+
+
+def resolve_profile_id(
+    authorization: Annotated[str | None, Header()] = None,
+    x_profile_id: Annotated[str | None, Header()] = None,
+) -> str:
+    token = _extract_bearer_token(authorization)
+    if token:
+        user = store.get_user_by_session_token(token)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid or expired session.")
+        return user.id
     return (x_profile_id or DEFAULT_PROFILE_ID).strip() or DEFAULT_PROFILE_ID
+
+
+def require_authenticated_user(authorization: Annotated[str | None, Header()] = None):
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    user = store.get_user_by_session_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.")
+    return user, token
 
 
 def _coerce_utc(value: datetime | None) -> datetime | None:
@@ -156,9 +196,56 @@ def _ensure_canvas_connection(profile_id: str):
     return connection
 
 
+@app.get("/", include_in_schema=False)
+def serve_index() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/app.js", include_in_schema=False)
+def serve_app_js() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "app.js")
+
+
+@app.get("/styles.css", include_in_schema=False)
+def serve_styles() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "styles.css")
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.post("/auth/register", response_model=AuthSessionResponse, status_code=201)
+def register(payload: AuthRegisterInput) -> AuthSessionResponse:
+    try:
+        user = store.create_user(payload.email, payload.password, payload.full_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    token, expires_at = store.create_session(user.id)
+    return AuthSessionResponse(token=token, expires_at=expires_at, user=user)
+
+
+@app.post("/auth/login", response_model=AuthSessionResponse)
+def login(payload: AuthLoginInput) -> AuthSessionResponse:
+    user = store.authenticate_user(payload.email, payload.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    token, expires_at = store.create_session(user.id)
+    return AuthSessionResponse(token=token, expires_at=expires_at, user=user)
+
+
+@app.get("/auth/me", response_model=AuthStatusResponse)
+def auth_me(session=Depends(require_authenticated_user)) -> AuthStatusResponse:
+    user, _ = session
+    return AuthStatusResponse(authenticated=True, user=user)
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(session=Depends(require_authenticated_user)) -> Response:
+    _, token = session
+    store.delete_session(token)
+    return Response(status_code=204)
 
 
 @app.get("/integrations/google/status", response_model=GoogleConnectionStatus)
@@ -384,6 +471,26 @@ def create_task(payload: TaskInput, profile_id: Annotated[str, Depends(resolve_p
     return store.add_task(payload, profile_id)
 
 
+@app.put("/tasks/{task_id}", response_model=Task)
+def update_task(
+    task_id: str,
+    payload: TaskUpdateInput,
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+) -> Task:
+    updated = store.update_task(task_id, payload, profile_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return updated
+
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: str, profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Response:
+    deleted = store.delete_task(task_id, profile_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return Response(status_code=204)
+
+
 @app.post("/tasks/brain-dump", response_model=BrainDumpResponse)
 def brain_dump(payload: BrainDumpRequest) -> BrainDumpResponse:
     parsed = parse_brain_dump(payload.text)
@@ -423,6 +530,19 @@ def update_preferences(
     profile_id: Annotated[str, Depends(resolve_profile_id)],
 ) -> UserPreferences:
     return store.set_preferences(payload, profile_id)
+
+
+@app.get("/plans/latest", response_model=SavedPlanResponse | None)
+def latest_plan(
+    profile_id: Annotated[str, Depends(resolve_profile_id)],
+    week_start: date | None = None,
+) -> SavedPlanResponse | None:
+    return store.get_latest_saved_plan(profile_id, week_start=week_start.isoformat() if week_start else None)
+
+
+def _persist_plan(plan: WeeklyPlanResponse, profile_id: str, *, source_action: str) -> WeeklyPlanResponse:
+    store.save_weekly_plan(plan, profile_id, source_action=source_action)
+    return plan
 
 
 def _run_planner(
@@ -513,7 +633,7 @@ def generate_plan(
     preferences = payload.preferences or store.get_preferences(profile_id)
     if payload.preferences:
         store.set_preferences(payload.preferences, profile_id)
-    return _run_planner(
+    plan = _run_planner(
         store.list_tasks(profile_id),
         payload.week_start,
         preferences,
@@ -521,6 +641,7 @@ def generate_plan(
         commitments=store.list_commitments(profile_id),
         engine_name=payload.engine_name,
     )
+    return _persist_plan(plan, profile_id, source_action="generate_week")
 
 
 @app.post("/planner/compare-engines", response_model=PlannerCompareResponse)
@@ -589,7 +710,7 @@ def replan(
         engine_name=payload.engine_name,
     )
     plan.alerts.append(f"Replanned after delay: {payload.reason}")
-    return plan
+    return _persist_plan(plan, profile_id, source_action="bounded_replan")
 
 
 @app.post("/planner/replan-rl", response_model=RLReplanResponse)
@@ -635,7 +756,8 @@ def replan_with_rl(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     result.alerts.append(f"RL-selected repair strategy '{chosen.value}' after delay: {payload.reason}")
-    return RLReplanResponse(chosen_strategy=chosen, encoded_state=state, result=result)
+    saved = _persist_plan(result, profile_id, source_action="rl_replan")
+    return RLReplanResponse(chosen_strategy=chosen, encoded_state=state, result=saved)
 
 
 @app.get("/planner/strategies")
@@ -702,10 +824,11 @@ def seed_plan(profile_id: Annotated[str, Depends(resolve_profile_id)]) -> Weekly
     week_start = today - timedelta(days=today.weekday()) if today else None
     if not week_start:
         raise HTTPException(status_code=400, detail="No tasks available")
-    return _run_planner(
+    plan = _run_planner(
         tasks,
         week_start,
         store.get_preferences(profile_id),
         commitments=store.list_commitments(profile_id),
     )
+    return _persist_plan(plan, profile_id, source_action="demo_seed")
 

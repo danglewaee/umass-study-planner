@@ -2,19 +2,35 @@
 
 UMass Study Partner is an adaptive planning system for students who need a week they can actually follow, not just an idealized schedule.
 
-The current build combines a stronger product-facing dashboard with the repo's strategy-aware planning and RL-assisted replanning logic.
+The current build combines a product-facing web app with strategy-aware planning, bounded replanning, and import paths for the student data that actually shapes a week.
+
+## Product framing
+- Who uses it:
+  overloaded students who are balancing coursework, commitments, and deadline changes week to week
+- What decision becomes easier:
+  "How should I reshape this week after a slip, a new deadline, or a packed calendar?"
+- What evidence exists today:
+  internal planner benchmarks, simulation coverage, and end-to-end beta flows in the app
+
+Important:
+- This repo is not claiming pilot impact yet.
+- Current benchmark claims should be labeled as benchmark or simulation, not real user outcomes.
+- The deployable beta is ready for private testing, but evidence from real students still needs a pilot.
 
 ## Architecture
-- `backend/app`: FastAPI API, task store, strategy-aware weekly planner, and replanning endpoints
+- `backend/app`: FastAPI API, SQLite-backed auth/store, strategy-aware weekly planner, saved-plan persistence, and replanning endpoints
 - `ml`: repair-policy training and evaluation for RL-assisted strategy selection
-- `frontend`: static dashboard for planning, repair runs, and check-ins
+- `frontend`: account-aware dashboard for planning, repair runs, imports, and check-ins
 - `tests`: planner and API integration coverage for the adaptive repair flow
 
 ## What the current build does
+- Registers users, creates session tokens, and scopes planner data to authenticated accounts
+- Saves the latest weekly plan for a student account so a generated week survives refreshes
+- Supports manual task CRUD for beta users who have not connected external systems yet
 - Parses brain-dump text into candidate tasks
 - Stores recurring fixed commitments such as classes, work shifts, clubs, and commute blocks
-- Supports profile-scoped Google Calendar connection state and recurring event import into fixed commitments
-- Supports profile-scoped Canvas connection state and assignment import into academic tasks
+- Supports account-scoped Google Calendar connection state and recurring event import into fixed commitments
+- Supports account-scoped Canvas connection state and assignment import into academic tasks
 - Generates weekly plans with one of four planner strategies:
   - `stability_aware`
   - `deadline_rescue`
@@ -54,12 +70,14 @@ The learning layer does not generate schedules directly. It selects the repair p
    `http://127.0.0.1:8000/oauth/google/callback`
 4. Start the API from the repo root:
    `uvicorn backend.app.main:app --reload`
-5. Open `frontend/index.html` in a browser.
+5. Open `http://127.0.0.1:8000/` in a browser.
 
-The local build now stores data in SQLite and scopes tasks, check-ins, commitments, and preferences by profile id. The frontend defaults to `demo-user`, and the API also accepts `X-Profile-Id` for switching between students.
+The local build stores data in SQLite and now supports both:
+- authenticated account sessions for real beta users
+- `X-Profile-Id` fallback for local demo mode and automated tests
 
 ## Google Calendar Sync
-The Google Calendar integration is now wired into the API and dashboard, but it only becomes active after you provide Google OAuth credentials.
+The Google Calendar integration is wired into the API and dashboard, but it only becomes active after you provide Google OAuth credentials.
 
 1. Create a Google Cloud project.
 2. Enable the Google Calendar API.
@@ -68,7 +86,7 @@ The Google Calendar integration is now wired into the API and dashboard, but it 
 5. Add a redirect URI that points back to the FastAPI callback, for example:
    `http://127.0.0.1:8000/oauth/google/callback`
 6. Start the backend with the Google env vars set.
-7. In the planner page, click `Connect Google`, authorize the selected student profile, refresh status, then import repeating timed events into fixed commitments.
+7. In the planner page, sign in, click `Connect Google`, authorize the student account, refresh status, then import repeating timed events into fixed commitments.
 
 Current import behavior:
 - Only timed events that repeat clearly over the lookahead window are imported into `commitments`
@@ -90,6 +108,18 @@ Current import behavior:
 - Re-importing the same Canvas assignment updates the existing task instead of duplicating it
 - Imported tasks are labeled with their Canvas course name to make multi-course planning easier
 
+## Deployable beta checklist
+- account auth and session flow
+- SQLite persistence for tasks, preferences, commitments, imports, and latest weekly plan
+- manual task CRUD
+- weekly plan generation and bounded replanning
+- Google Calendar recurring-event import
+- Canvas assignment import
+- dashboard served directly from FastAPI at `/`
+
+This is a reasonable private beta shape.
+It is not yet a production launch shape because secrets, OAuth hardening, usage logging, and pilot evidence still need another pass.
+
 ## Evaluate the RL selector
 Train and evaluate the repair selector from the repo root:
 
@@ -103,6 +133,6 @@ python -m unittest discover -s tests -v
 ```
 
 ## Notes
-- The planner remains heuristic-based, but it now exposes strategy-aware replanning and plan-quality metrics that are useful in a product demo.
+- The planner remains hybrid: heuristic and OR-Tools planner engines are both available, and the app can compare them side by side.
 - The RL module learns when to apply each repair strategy instead of trying to generate schedules directly.
-- Storage now persists to SQLite; PostgreSQL, encrypted token storage, app auth, and richer optimization can be added later without rewriting the app shape.
+- Storage now persists to SQLite; PostgreSQL, encrypted token storage, stronger auth hardening, and richer optimization can be added later without rewriting the app shape.

@@ -1,6 +1,7 @@
 const byId = (id) => document.getElementById(id);
 
 const DEFAULT_VIEW = "overview";
+const AUTH_TOKEN_STORAGE_KEY = "umass-study-partner.auth-token";
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const LABEL_OVERRIDES = {
   heuristic_v1: "Heuristic V1",
@@ -29,9 +30,22 @@ const REPAIR_STRATEGY_META = {
   },
 };
 
+function defaultApiBase() {
+  const configured = byId("apiBase")?.value?.trim();
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+  if (window.location.protocol === "file:") {
+    return "http://127.0.0.1:8000";
+  }
+  return window.location.origin.replace(/\/$/, "");
+}
+
 const state = {
-  apiBase: byId("apiBase").value,
+  apiBase: defaultApiBase(),
   profileId: byId("profileId").value,
+  authToken: localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "",
+  currentUser: null,
   strategies: [],
   engines: [],
   defaultEngine: "heuristic_v1",
@@ -43,6 +57,7 @@ const state = {
   googleStatus: null,
   activeView: DEFAULT_VIEW,
   onboardingAction: { type: "route", view: "planner", label: "Open Planner" },
+  latestSavedPlan: null,
 };
 
 function escapeHtml(value) {
@@ -123,16 +138,70 @@ function setActiveView(viewName, syncHash = true) {
   }
 }
 
+function setSession(session) {
+  state.authToken = session.token;
+  state.currentUser = session.user;
+  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, session.token);
+  renderAuthState();
+}
+
+function clearSession() {
+  state.authToken = "";
+  state.currentUser = null;
+  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  renderAuthState();
+}
+
+function renderAuthState() {
+  const isAuthenticated = Boolean(state.authToken && state.currentUser);
+  const status = byId("authStatus");
+  const identity = byId("authIdentity");
+  const demoProfileCard = byId("demoProfileCard");
+  const formFields = ["authFullName", "authEmail", "authPassword"];
+
+  status.className = `integration-status ${isAuthenticated ? "good" : "neutral"}`;
+  status.innerHTML = isAuthenticated
+    ? `<strong>Signed in as ${escapeHtml(state.currentUser.full_name)}</strong><div class="task-meta"><small>${escapeHtml(
+        state.currentUser.email
+      )}</small></div>`
+    : `<strong>Private beta mode is available.</strong><div class="task-meta"><small>Create an account to keep plans, tasks, and imports tied to one student.</small></div>`;
+  identity.textContent = isAuthenticated
+    ? "This account now owns tasks, commitments, imports, and saved weekly plans."
+    : "No account session yet. You can still use the local demo profile below.";
+  byId("logoutButton").classList.toggle("is-hidden", !isAuthenticated);
+  demoProfileCard.classList.toggle("is-hidden", isAuthenticated);
+  formFields.forEach((id) => {
+    byId(id).disabled = isAuthenticated;
+  });
+  byId("registerButton").disabled = isAuthenticated;
+  byId("loginButton").disabled = isAuthenticated;
+}
+
 function api(path, options = {}) {
-  state.apiBase = (byId("apiBase").value.trim() || state.apiBase).replace(/\/$/, "");
+  const { headers = {}, skipAuth = false, ...rest } = options;
+  state.apiBase = defaultApiBase();
   state.profileId = (byId("profileId").value.trim() || state.profileId || "demo-user");
+
+  const requestHeaders = {
+    "Content-Type": "application/json",
+    ...headers,
+  };
+
+  if (!skipAuth) {
+    if (state.authToken) {
+      requestHeaders.Authorization = `Bearer ${state.authToken}`;
+    } else {
+      requestHeaders["X-Profile-Id"] = state.profileId;
+    }
+  }
+
   return fetch(`${state.apiBase}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      "X-Profile-Id": state.profileId,
-    },
-    ...options,
+    headers: requestHeaders,
+    ...rest,
   }).then(async (response) => {
+    if (response.status === 401 && state.authToken) {
+      clearSession();
+    }
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || `Request failed: ${response.status}`);
@@ -311,8 +380,15 @@ function renderTasks(tasks) {
           <div class="task-meta">
             <small>${escapeHtml(formatLabel(task.category))} &middot; due ${escapeHtml(task.deadline)} &middot; ${escapeHtml(task.estimated_minutes)} min</small>
           </div>
+          ${task.description ? `<div class="task-meta"><small>${escapeHtml(task.description)}</small></div>` : ""}
         </div>
-        <span class="status-pill ${escapeHtml(task.status)}">${escapeHtml(formatLabel(task.status))}</span>
+        <div class="task-actions">
+          <span class="status-pill ${escapeHtml(task.status)}">${escapeHtml(formatLabel(task.status))}</span>
+          <button type="button" class="secondary compact-button" data-edit-task="${escapeHtml(task.id)}">Edit</button>
+          <button type="button" class="secondary compact-button" data-complete-task="${escapeHtml(task.id)}">Done</button>
+          <button type="button" class="secondary compact-button" data-delay-task="${escapeHtml(task.id)}">Delay</button>
+          <button type="button" class="secondary compact-button" data-delete-task="${escapeHtml(task.id)}">Delete</button>
+        </div>
       </div>
     `,
     "No tasks available in the store yet."
@@ -1007,6 +1083,64 @@ async function loadCanvasStatus() {
   renderOnboarding();
 }
 
+function resetTaskForm() {
+  const suggestedDeadline = new Date();
+  suggestedDeadline.setDate(suggestedDeadline.getDate() + 1);
+  byId("editingTaskId").value = "";
+  byId("taskTitle").value = "";
+  byId("taskDescription").value = "";
+  byId("taskCategory").value = "academics";
+  byId("taskDeadline").value = suggestedDeadline.toISOString().slice(0, 10);
+  byId("taskMinutes").value = 90;
+  byId("taskDifficulty").value = 3;
+  byId("taskPriority").value = 3;
+  byId("taskStatus").value = "pending";
+  byId("saveTask").textContent = "Save Task";
+}
+
+function populateTaskForm(task) {
+  if (!task) {
+    resetTaskForm();
+    return;
+  }
+  byId("editingTaskId").value = task.id;
+  byId("taskTitle").value = task.title;
+  byId("taskDescription").value = task.description || "";
+  byId("taskCategory").value = task.category;
+  byId("taskDeadline").value = task.deadline;
+  byId("taskMinutes").value = task.estimated_minutes;
+  byId("taskDifficulty").value = task.difficulty;
+  byId("taskPriority").value = task.priority;
+  byId("taskStatus").value = task.status;
+  byId("saveTask").textContent = "Update Task";
+}
+
+function collectTaskPayload(includeStatus = true) {
+  const payload = {
+    title: byId("taskTitle").value.trim(),
+    description: byId("taskDescription").value.trim(),
+    category: byId("taskCategory").value,
+    deadline: byId("taskDeadline").value,
+    estimated_minutes: Number(byId("taskMinutes").value || 90),
+    difficulty: Number(byId("taskDifficulty").value || 3),
+    priority: Number(byId("taskPriority").value || 3),
+  };
+  if (includeStatus) {
+    payload.status = byId("taskStatus").value;
+  }
+  return payload;
+}
+
+async function loadLatestPlan() {
+  const weekStart = byId("weekStart").value;
+  const suffix = weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : "";
+  const saved = await api(`/plans/latest${suffix}`);
+  state.latestSavedPlan = saved;
+  if (saved?.plan) {
+    renderPlan(saved.plan, `Loaded saved week (${formatLabel(saved.source_action)})`, "neutral");
+  }
+}
+
 async function loadProfileData() {
   await Promise.all([
     loadTasks(),
@@ -1016,6 +1150,68 @@ async function loadProfileData() {
     loadGoogleStatus(),
     loadCanvasStatus(),
   ]);
+  await loadLatestPlan();
+}
+
+async function bootstrapAuth() {
+  renderAuthState();
+  if (!state.authToken) {
+    return;
+  }
+  try {
+    const status = await api("/auth/me");
+    if (!status.authenticated || !status.user) {
+      clearSession();
+      return;
+    }
+    state.currentUser = status.user;
+    renderAuthState();
+  } catch (error) {
+    clearSession();
+    throw error;
+  }
+}
+
+async function registerAccount() {
+  const payload = {
+    full_name: byId("authFullName").value.trim(),
+    email: byId("authEmail").value.trim(),
+    password: byId("authPassword").value,
+  };
+  const session = await api("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    skipAuth: true,
+  });
+  setSession(session);
+  byId("authPassword").value = "";
+  await loadProfileData();
+}
+
+async function loginAccount() {
+  const payload = {
+    email: byId("authEmail").value.trim(),
+    password: byId("authPassword").value,
+  };
+  const session = await api("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    skipAuth: true,
+  });
+  setSession(session);
+  byId("authPassword").value = "";
+  await loadProfileData();
+}
+
+async function logoutAccount() {
+  if (state.authToken) {
+    await api("/auth/logout", { method: "POST" });
+  }
+  clearSession();
+  renderGoogleImportSummary(null);
+  renderCanvasImportSummary(null);
+  renderEngineComparison(null);
+  await loadProfileData();
 }
 
 async function parseBrainDump() {
@@ -1112,6 +1308,53 @@ async function loadSeedPlan() {
   renderPlan(plan, "Loaded demo seed plan", "neutral");
   await loadTasks();
   setActiveView("planner");
+}
+
+async function saveTask() {
+  const taskId = byId("editingTaskId").value;
+  if (taskId) {
+    await api(`/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify(collectTaskPayload(true)),
+    });
+  } else {
+    await api("/tasks", {
+      method: "POST",
+      body: JSON.stringify(collectTaskPayload(false)),
+    });
+  }
+  resetTaskForm();
+  await loadTasks();
+  setActiveView("tasks");
+}
+
+async function updateTaskStatus(taskId, status) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) {
+    throw new Error("Task not found in local state.");
+  }
+  await api(`/tasks/${taskId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      title: task.title,
+      description: task.description,
+      category: task.category,
+      deadline: task.deadline,
+      estimated_minutes: task.estimated_minutes,
+      difficulty: task.difficulty,
+      priority: task.priority,
+      status,
+    }),
+  });
+  await loadTasks();
+}
+
+async function removeTask(taskId) {
+  await api(`/tasks/${taskId}`, { method: "DELETE" });
+  if (byId("editingTaskId").value === taskId) {
+    resetTaskForm();
+  }
+  await loadTasks();
 }
 
 async function addCommitment() {
@@ -1230,11 +1473,16 @@ function bindRoutes() {
 
 function bindEvents() {
   bindRoutes();
+  byId("registerButton").addEventListener("click", () => registerAccount().catch(handleError));
+  byId("loginButton").addEventListener("click", () => loginAccount().catch(handleError));
+  byId("logoutButton").addEventListener("click", () => logoutAccount().catch(handleError));
   byId("parseDump").addEventListener("click", () => parseBrainDump().catch(handleError));
   byId("generatePlan").addEventListener("click", () => generatePlan().catch(handleError));
   byId("compareEngines").addEventListener("click", () => compareEngines().catch(handleError));
   byId("generatePlanPrimary").addEventListener("click", () => generatePlan().catch(handleError));
   byId("onboardingAction").addEventListener("click", () => runOnboardingAction().catch(handleError));
+  byId("saveTask").addEventListener("click", () => saveTask().catch(handleError));
+  byId("resetTaskForm").addEventListener("click", () => resetTaskForm());
   byId("addCommitment").addEventListener("click", () => addCommitment().catch(handleError));
   byId("connectGoogleCalendar").addEventListener("click", () => connectGoogleCalendar().catch(handleError));
   byId("refreshGoogleStatus").addEventListener("click", () => loadGoogleStatus().catch(handleError));
@@ -1278,6 +1526,29 @@ function bindEvents() {
     }
     deleteCommitment(button.dataset.deleteCommitment).catch(handleError);
   });
+  byId("taskList").addEventListener("click", (event) => {
+    const editButton = event.target.closest("[data-edit-task]");
+    if (editButton) {
+      const task = state.tasks.find((item) => item.id === editButton.dataset.editTask);
+      populateTaskForm(task || null);
+      setActiveView("tasks");
+      return;
+    }
+    const completeButton = event.target.closest("[data-complete-task]");
+    if (completeButton) {
+      updateTaskStatus(completeButton.dataset.completeTask, "completed").catch(handleError);
+      return;
+    }
+    const delayButton = event.target.closest("[data-delay-task]");
+    if (delayButton) {
+      updateTaskStatus(delayButton.dataset.delayTask, "delayed").catch(handleError);
+      return;
+    }
+    const deleteButton = event.target.closest("[data-delete-task]");
+    if (deleteButton) {
+      removeTask(deleteButton.dataset.deleteTask).catch(handleError);
+    }
+  });
   byId("setupChecklist").addEventListener("click", (event) => {
     const button = event.target.closest("[data-onboarding-route]");
     if (!button) {
@@ -1310,6 +1581,7 @@ async function init() {
   setWeekStartDefault();
   bindEvents();
   setActiveView(requestedView(), false);
+  renderAuthState();
   renderScores();
   renderMetrics(null);
   renderParsedTasks([]);
@@ -1319,6 +1591,7 @@ async function init() {
   renderGoogleCalendars([]);
   renderGoogleImportSummary(null);
   renderOnboarding();
+  resetTaskForm();
   renderRepairTaskContext();
   renderRepairStrategyCards();
   renderRepairPreview();
@@ -1331,6 +1604,7 @@ async function init() {
     final_epsilon: 0,
     action_counts: {},
   });
+  await bootstrapAuth().catch(handleError);
   await Promise.all([loadStrategies(), loadProfileData()]).catch(handleError);
 }
 

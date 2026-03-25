@@ -47,6 +47,35 @@ class UserPreferences(BaseModel):
     preferred_block_minutes: int = 90
 
 
+class AuthRegisterInput(BaseModel):
+    email: str = Field(min_length=5, max_length=160)
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=2, max_length=80)
+
+
+class AuthLoginInput(BaseModel):
+    email: str = Field(min_length=5, max_length=160)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class AuthUser(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    created_at: datetime
+
+
+class AuthSessionResponse(BaseModel):
+    token: str
+    expires_at: datetime
+    user: AuthUser
+
+
+class AuthStatusResponse(BaseModel):
+    authenticated: bool
+    user: AuthUser | None = None
+
+
 class TaskInput(BaseModel):
     title: str = Field(min_length=3, max_length=120)
     description: str = ""
@@ -61,6 +90,10 @@ class Task(TaskInput):
     id: str
     status: TaskStatus = TaskStatus.pending
     created_at: datetime
+
+
+class TaskUpdateInput(TaskInput):
+    status: TaskStatus = TaskStatus.pending
 
 
 class BrainDumpRequest(BaseModel):
@@ -220,6 +253,13 @@ class WeeklyPlanResponse(BaseModel):
     strategy_used: PlanStrategy = PlanStrategy.stability_aware
     engine_used: str = "heuristic_v1"
     metrics: PlanMetrics | None = None
+
+
+class SavedPlanResponse(BaseModel):
+    id: str
+    source_action: str
+    saved_at: datetime
+    plan: WeeklyPlanResponse
 
 
 class PlannerCompareRequest(BaseModel):
