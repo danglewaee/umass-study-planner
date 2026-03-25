@@ -120,6 +120,30 @@ Current import behavior:
 This is a reasonable private beta shape.
 It is not yet a production launch shape because secrets, OAuth hardening, usage logging, and pilot evidence still need another pass.
 
+## Deploy the beta
+Recommended first host: Railway.
+
+Why this is the current recommendation:
+- the repo already ships with a Dockerfile
+- FastAPI serves the frontend directly, so you only need one web service
+- the beta still uses SQLite, so a mounted volume is the shortest path to persistent storage
+
+Suggested Railway setup:
+1. Create a new service from this GitHub repo.
+2. Let Railway build from the included `Dockerfile`.
+3. Add a volume and mount it to a path such as `/data`.
+4. Set `STUDY_PARTNER_DB_PATH=/data/study_partner.sqlite3`
+5. Set Google env vars if you want Calendar sync:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `GOOGLE_REDIRECT_URI`
+6. Point the healthcheck to `/health`
+7. Open the deployed root URL and create a beta account
+
+Deploy note:
+- Railway injects `PORT`; the Dockerfile now respects it automatically.
+- If you do not mount a volume, SQLite will be ephemeral and beta user data can disappear on redeploy.
+
 ## Evaluate the RL selector
 Train and evaluate the repair selector from the repo root:
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import sqlite3
 from datetime import datetime, timedelta
@@ -26,7 +27,13 @@ from .models import (
 )
 
 DEFAULT_PROFILE_ID = "demo-user"
-DB_PATH = Path(__file__).resolve().parents[1] / "data" / "study_partner.sqlite3"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "study_partner.sqlite3"
+CONFIGURED_DB_PATH = os.getenv("STUDY_PARTNER_DB_PATH") or (
+    str(Path(os.environ["RAILWAY_VOLUME_MOUNT_PATH"]) / "study_partner.sqlite3")
+    if os.getenv("RAILWAY_VOLUME_MOUNT_PATH")
+    else None
+)
+DB_PATH = Path(CONFIGURED_DB_PATH) if CONFIGURED_DB_PATH else DEFAULT_DB_PATH
 
 
 class SQLiteStore:
