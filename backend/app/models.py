@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TaskCategory(str, Enum):
@@ -28,6 +28,15 @@ class PlanStrategy(str, Enum):
     focus_windows = "focus_windows"
 
 
+class CommitmentKind(str, Enum):
+    class_session = "class"
+    work = "work"
+    club = "club"
+    commute = "commute"
+    personal = "personal"
+    health = "health"
+
+
 class UserPreferences(BaseModel):
     sleep_start: time = time(hour=23, minute=0)
     sleep_end: time = time(hour=7, minute=0)
@@ -36,6 +45,35 @@ class UserPreferences(BaseModel):
     max_deep_blocks_per_day: int = 3
     break_minutes: int = 15
     preferred_block_minutes: int = 90
+
+
+class AuthRegisterInput(BaseModel):
+    email: str = Field(min_length=5, max_length=160)
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=2, max_length=80)
+
+
+class AuthLoginInput(BaseModel):
+    email: str = Field(min_length=5, max_length=160)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class AuthUser(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    created_at: datetime
+
+
+class AuthSessionResponse(BaseModel):
+    token: str
+    expires_at: datetime
+    user: AuthUser
+
+
+class AuthStatusResponse(BaseModel):
+    authenticated: bool
+    user: AuthUser | None = None
 
 
 class TaskInput(BaseModel):
@@ -54,12 +92,128 @@ class Task(TaskInput):
     created_at: datetime
 
 
+class TaskUpdateInput(TaskInput):
+    status: TaskStatus = TaskStatus.pending
+
+
 class BrainDumpRequest(BaseModel):
     text: str = Field(min_length=10, max_length=5000)
 
 
 class BrainDumpResponse(BaseModel):
     tasks: list[TaskInput]
+
+
+class FixedCommitmentInput(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    day_of_week: int = Field(ge=0, le=6, description="Monday=0")
+    start: time
+    end: time
+    kind: CommitmentKind = CommitmentKind.class_session
+    location: str = Field(default="", max_length=120)
+    notes: str = Field(default="", max_length=240)
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "FixedCommitmentInput":
+        if self.end <= self.start:
+            raise ValueError("Commitment end must be after start.")
+        return self
+
+
+class FixedCommitment(FixedCommitmentInput):
+    id: str
+    created_at: datetime
+
+
+class GoogleAuthStartResponse(BaseModel):
+    authorization_url: str
+
+
+class GoogleCalendarSummary(BaseModel):
+    id: str
+    summary: str
+    primary: bool = False
+    access_role: str = "reader"
+    time_zone: str | None = None
+
+
+class GoogleConnectionStatus(BaseModel):
+    configured: bool
+    connected: bool
+    connected_email: str | None = None
+    last_synced_at: datetime | None = None
+    message: str | None = None
+
+
+class GoogleConnection(BaseModel):
+    profile_id: str
+    email: str
+    access_token: str
+    refresh_token: str
+    scope: str = ""
+    token_expiry: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+    last_synced_at: datetime | None = None
+
+
+class GoogleImportRequest(BaseModel):
+    calendar_id: str = "primary"
+    lookahead_days: int = Field(default=28, ge=7, le=90)
+
+
+class GoogleImportResponse(BaseModel):
+    calendar_id: str
+    imported_commitments: int
+    updated_commitments: int
+    skipped_events: int
+    imported_titles: list[str]
+    message: str
+
+
+class CanvasConnectionInput(BaseModel):
+    base_url: str = Field(min_length=10, max_length=160)
+    access_token: str = Field(min_length=20, max_length=512)
+
+
+class CanvasConnectionStatus(BaseModel):
+    connected: bool
+    base_url: str | None = None
+    last_synced_at: datetime | None = None
+    message: str | None = None
+
+
+class CanvasConnection(BaseModel):
+    profile_id: str
+    base_url: str
+    access_token: str
+    created_at: datetime
+    updated_at: datetime
+    last_synced_at: datetime | None = None
+
+
+class CanvasCourseSummary(BaseModel):
+    id: int
+    name: str
+    course_code: str | None = None
+    workflow_state: str | None = None
+
+
+class CanvasImportRequest(BaseModel):
+    course_id: int
+    course_name: str = Field(default="", max_length=160)
+    default_estimated_minutes: int = Field(default=90, ge=15, le=720)
+    default_difficulty: int = Field(default=3, ge=1, le=5)
+
+
+class CanvasImportResponse(BaseModel):
+    course_id: int
+    course_name: str
+    imported_tasks: int
+    updated_tasks: int
+    skipped_assignments: int
+    imported_titles: list[str]
+    message: str
 
 
 class ScheduleBlock(BaseModel):
@@ -69,7 +223,7 @@ class ScheduleBlock(BaseModel):
     day: date
     start: time
     end: time
-    kind: Literal["deep_work", "break", "sleep", "buffer", "class", "recovery"]
+    kind: Literal["deep_work", "break", "sleep", "buffer", "class", "recovery", "commitment"]
     reasoning: str
 
 
@@ -77,6 +231,7 @@ class WeeklyPlanRequest(BaseModel):
     week_start: date
     preferences: UserPreferences | None = None
     strategy: PlanStrategy = PlanStrategy.stability_aware
+    engine_name: str | None = None
 
 
 class PlanMetrics(BaseModel):
@@ -96,7 +251,78 @@ class WeeklyPlanResponse(BaseModel):
     alerts: list[str]
     score_summary: dict[str, float]
     strategy_used: PlanStrategy = PlanStrategy.stability_aware
+    engine_used: str = "heuristic_v1"
     metrics: PlanMetrics | None = None
+
+
+class SavedPlanResponse(BaseModel):
+    id: str
+    source_action: str
+    saved_at: datetime
+    plan: WeeklyPlanResponse
+
+
+class AnalyticsSessionStartInput(BaseModel):
+    source: str = Field(default="web_app", max_length=80)
+    entry_view: str = Field(default="overview", max_length=80)
+    authenticated: bool = False
+
+
+class UsageEventRecord(BaseModel):
+    event_type: str
+    created_at: datetime
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class UsageDailyPoint(BaseModel):
+    day: date
+    total_events: int
+    plan_generations: int = 0
+    replan_runs: int = 0
+
+
+class UsageAnalyticsSummary(BaseModel):
+    profile_id: str
+    window_days: int
+    total_events: int = 0
+    session_starts: int = 0
+    plan_generations: int = 0
+    replan_runs: int = 0
+    task_events: int = 0
+    import_runs: int = 0
+    active_days: int = 0
+    last_active_at: datetime | None = None
+    recent_events: list[UsageEventRecord] = Field(default_factory=list)
+    daily_activity: list[UsageDailyPoint] = Field(default_factory=list)
+
+
+class PlannerCompareRequest(BaseModel):
+    week_start: date
+    preferences: UserPreferences | None = None
+    strategy: PlanStrategy = PlanStrategy.stability_aware
+    engine_names: list[str] = Field(default_factory=list)
+
+
+class PlannerComparisonEntry(BaseModel):
+    engine_name: str
+    scheduled_tasks: int
+    unscheduled_tasks: int
+    preserved_blocks: int
+    overload_days: int
+    focus_alignment_pct: float
+    total_deep_work_minutes: int
+    goal_progress: float
+    consistency: float
+    balance: float
+    alert_count: int
+
+
+class PlannerCompareResponse(BaseModel):
+    week_start: date
+    strategy: PlanStrategy
+    recommended_engine: str
+    compared_engines: list[PlannerComparisonEntry]
+    highlights: list[str]
 
 
 class CheckInInput(BaseModel):
@@ -123,11 +349,13 @@ class ReplanRequest(BaseModel):
     week_start: date
     reason: str = Field(default="Task slipped")
     strategy: PlanStrategy | None = None
+    engine_name: str | None = None
 
 
 class RLTrainRequest(BaseModel):
     episodes: int = Field(default=60, ge=20, le=300)
     seed: int = Field(default=11, ge=0)
+    engine_name: str | None = None
 
 
 class RLTrainResponse(BaseModel):
@@ -135,6 +363,7 @@ class RLTrainResponse(BaseModel):
     unique_states: int
     average_reward: float
     final_epsilon: float
+    planner_engine: str
     action_counts: dict[str, int]
 
 
@@ -148,6 +377,7 @@ class RepairEvaluationRequest(BaseModel):
     training_episodes: int = Field(default=60, ge=20, le=300)
     evaluation_scenarios: int = Field(default=40, ge=10, le=200)
     seed: int = Field(default=11, ge=0)
+    engine_name: str | None = None
 
 
 class HealthResponse(BaseModel):

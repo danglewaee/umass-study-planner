@@ -17,9 +17,9 @@
       <aside class="sidebar">
         <div class="sidebar-brand">
           <div class="brand-mark">U</div>
-          <div>
+          <div class="sidebar-brand-copy">
             <strong>UMass Study Partner</strong>
-            <p>Adaptive weekly planning for real student constraints.</p>
+            <p>Adaptive weekly planning for overloaded students.</p>
           </div>
         </div>
 
@@ -32,79 +32,160 @@
           <a href="#insights" data-route-link="insights">Insights</a>
         </nav>
 
+        <input id="apiBase" type="hidden" value="" />
+
         <section class="sidebar-card">
-          <label for="apiBase">API Base URL</label>
-          <input id="apiBase" value="http://127.0.0.1:8000" />
+          <p class="eyebrow">Account</p>
+          <h2 class="sidebar-card-title">Private beta access</h2>
+          <div id="authStatus" class="integration-status neutral">
+            Create an account or sign in to keep your planner private and persistent.
+          </div>
+          <div class="form-grid compact-form-grid auth-form-grid">
+            <label>
+              Full Name
+              <input id="authFullName" placeholder="Jamie Chen" />
+            </label>
+            <label>
+              Email
+              <input id="authEmail" type="email" placeholder="you@umass.edu" />
+            </label>
+            <label>
+              Password
+              <input id="authPassword" type="password" placeholder="At least 8 characters" />
+            </label>
+          </div>
+          <div class="sidebar-actions">
+            <button id="registerButton">Create Account</button>
+            <button id="loginButton" class="secondary">Sign In</button>
+            <button id="logoutButton" class="secondary is-hidden">Sign Out</button>
+          </div>
+          <p id="authIdentity" class="sidebar-label">No account session yet.</p>
+        </section>
+
+        <section id="demoProfileCard" class="sidebar-card sidebar-card-muted">
+          <label for="profileId">Local Demo Profile</label>
+          <input id="profileId" value="demo-user" />
+          <p class="sidebar-label">Only used when no account session is active. Useful for local demos and seeded test data.</p>
+        </section>
+
+        <section class="sidebar-card sidebar-card-emphasis">
+          <p class="sidebar-label">Quick Actions</p>
           <div class="sidebar-actions">
             <button id="loadSeed" class="secondary">Load Demo Plan</button>
             <button id="generatePlanPrimary">Generate Week</button>
           </div>
         </section>
 
-        <section class="sidebar-card compact-card">
-          <p class="sidebar-label">Navigation note</p>
-          <p class="sidebar-note">
-            Each workflow now lives on its own page so the demo stays lighter and easier to follow.
-          </p>
-        </section>
       </aside>
 
       <main class="main-shell">
-        <section class="page-view" data-view="overview">
-          <header class="page-banner hero-banner">
-            <div>
-              <p class="eyebrow">Overview</p>
-              <h1>Move through the planner one step at a time.</h1>
+        <section class="page-view overview-page" data-view="overview">
+          <header class="overview-shell">
+            <section class="module-card overview-hero">
+              <p class="eyebrow">Project</p>
+              <h1 class="project-title">UMass Study Partner</h1>
               <p class="page-subtitle">
-                The product is now split into smaller pages so each workflow feels focused instead of crowded.
+                Turn class schedules, Canvas deadlines, and real weekly obligations into a plan that can recover when the
+                week shifts.
               </p>
-            </div>
-
-            <section class="module-card banner-card">
-              <p class="eyebrow">Suggested Flow</p>
-              <h2>Recommended demo order</h2>
-              <div class="flow-list">
-                <div class="flow-item"><span>1</span><p>Parse tasks on Task Intake.</p></div>
-                <div class="flow-item"><span>2</span><p>Generate a weekly plan on Planner.</p></div>
-                <div class="flow-item"><span>3</span><p>Inspect current work on Tasks.</p></div>
-                <div class="flow-item"><span>4</span><p>Run disruptions inside Repair Lab.</p></div>
+              <div class="hero-chip-row">
+                <span class="hero-chip">Google Calendar</span>
+                <span class="hero-chip">Canvas import</span>
+                <span class="hero-chip">RL repair</span>
+                <span class="hero-chip">OR-Tools benchmark</span>
+              </div>
+              <div class="hero-proof-card">
+                <span class="eyebrow">Why it feels different</span>
+                <strong>One study partner for weekly planning, recovery, and side-by-side engine comparison.</strong>
+              </div>
+              <div class="toolbar">
+                <button id="onboardingAction">Continue Setup</button>
               </div>
             </section>
           </header>
 
-          <section class="jump-grid">
-            <article class="module-card jump-card">
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Setup</p>
+                  <h2>First Week Guide</h2>
+                  <p class="module-subtitle">Use this checklist to connect data sources, import commitments, and get to a usable week fast.</p>
+                </div>
+              </div>
+              <div id="setupProgress" class="overview-stat-grid"></div>
+              <div id="setupChecklist" class="list compact-list"></div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Readiness</p>
+                  <h2>Current Student Signal</h2>
+                  <p class="module-subtitle">These signals tell you whether the current profile has enough structure to generate a meaningful week.</p>
+                </div>
+              </div>
+              <div id="setupSignals" class="overview-stat-grid"></div>
+              <div id="setupNotes" class="list compact-list"></div>
+            </section>
+          </section>
+
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Evidence</p>
+                  <h2>Beta Usage Snapshot</h2>
+                  <p class="module-subtitle">These are product usage signals from the current account or demo profile, not outcome claims.</p>
+                </div>
+              </div>
+              <div id="analyticsStats" class="overview-stat-grid"></div>
+              <div id="analyticsRecent" class="list compact-list"></div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Activity</p>
+                  <h2>Recent Product Activity</h2>
+                  <p class="module-subtitle">Useful for pilot evidence later: sessions, plan generation, replanning, and imports over time.</p>
+                </div>
+              </div>
+              <div id="analyticsDaily" class="list compact-list"></div>
+              <div class="integration-status neutral">
+                Keep wording precise: benchmark and beta usage are evidence of system behavior, not proof of student outcomes yet.
+              </div>
+            </section>
+          </section>
+
+          <section class="component-grid">
+            <article class="module-card component-card">
               <p class="eyebrow">Planner</p>
-              <h2>Build the week</h2>
-              <p>Generate a plan, compare strategies, and inspect quality signals without extra distractions.</p>
+              <h2>Build The Week</h2>
               <button type="button" data-route-target="planner">Open Planner</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card">
               <p class="eyebrow">Task Intake</p>
-              <h2>Start from a brain dump</h2>
-              <p>Turn messy notes into structured work items before you schedule anything.</p>
+              <h2>Parse Brain Dumps</h2>
               <button type="button" class="secondary" data-route-target="intake">Open Task Intake</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card">
               <p class="eyebrow">Tasks</p>
-              <h2>See current work cleanly</h2>
-              <p>Review the active task list on its own page instead of keeping it on every screen.</p>
+              <h2>Review Current Work</h2>
               <button type="button" class="secondary" data-route-target="tasks">Open Tasks</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card">
               <p class="eyebrow">Repair Lab</p>
-              <h2>Test disruptions separately</h2>
-              <p>Delay a task, train the selector, and compare repairs without cluttering the main planner.</p>
+              <h2>Handle Disruptions</h2>
               <button type="button" class="secondary" data-route-target="repair">Open Repair Lab</button>
             </article>
 
-            <article class="module-card jump-card">
+            <article class="module-card component-card component-card-wide">
               <p class="eyebrow">Insights</p>
-              <h2>Reflect on energy and stress</h2>
-              <p>Keep check-ins and coaching guidance in one dedicated page.</p>
+              <h2>Capture How The Week Feels</h2>
               <button type="button" class="secondary" data-route-target="insights">Open Insights</button>
             </article>
           </section>
@@ -153,6 +234,10 @@
                     <select id="strategySelect"></select>
                   </label>
                   <label>
+                    Planner Engine
+                    <select id="plannerEngineSelect"></select>
+                  </label>
+                  <label>
                     Preferred Block
                     <input id="blockMinutes" type="number" value="90" min="30" max="180" />
                   </label>
@@ -161,6 +246,16 @@
               </div>
               <div id="alerts" class="alert-stack"></div>
               <div id="weekPlan" class="schedule-board empty-state">Generate a plan to see the week layout.</div>
+              <div class="module-head compact-head comparison-head">
+                <div>
+                  <p class="eyebrow">Benchmark</p>
+                  <h2>Engine Comparison</h2>
+                  <p class="module-subtitle">Run both planner engines on the same week and compare who wins on coverage, overload, and focus alignment.</p>
+                </div>
+                <button id="compareEngines" class="secondary">Compare Engines</button>
+              </div>
+              <div id="engineComparisonHighlights" class="list compact-list"></div>
+              <div id="engineComparisonGrid" class="comparison-grid"></div>
             </section>
 
             <aside class="page-sidebar">
@@ -197,6 +292,99 @@
                     <input id="maxDeepBlocks" type="number" value="3" min="1" max="6" />
                   </label>
                 </div>
+              </section>
+
+              <section class="module-card">
+                <div class="module-head">
+                  <div>
+                    <p class="eyebrow">Fixed Commitments</p>
+                    <h2>Weekly Schedule Blocks</h2>
+                    <p class="module-subtitle">
+                      Add recurring classes, work shifts, clubs, and other blocks the planner should never override.
+                    </p>
+                  </div>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Title
+                    <input id="commitmentTitle" placeholder="Intro to Algorithms lecture" />
+                  </label>
+                  <label>
+                    Type
+                    <select id="commitmentKind">
+                      <option value="class">Class</option>
+                      <option value="work">Work</option>
+                      <option value="club">Club</option>
+                      <option value="commute">Commute</option>
+                      <option value="personal">Personal</option>
+                      <option value="health">Health</option>
+                    </select>
+                  </label>
+                  <label>
+                    Day
+                    <select id="commitmentDay">
+                      <option value="0">Monday</option>
+                      <option value="1">Tuesday</option>
+                      <option value="2">Wednesday</option>
+                      <option value="3">Thursday</option>
+                      <option value="4">Friday</option>
+                      <option value="5">Saturday</option>
+                      <option value="6">Sunday</option>
+                    </select>
+                  </label>
+                  <label>
+                    Start
+                    <input id="commitmentStart" type="time" value="10:00" />
+                  </label>
+                  <label>
+                    End
+                    <input id="commitmentEnd" type="time" value="11:15" />
+                  </label>
+                  <label>
+                    Location
+                    <input id="commitmentLocation" placeholder="LGRC / library / campus job" />
+                  </label>
+                </div>
+                <div class="toolbar">
+                  <button id="addCommitment" class="secondary">Add Commitment</button>
+                </div>
+                <div id="commitmentList" class="list"></div>
+              </section>
+
+              <section class="module-card">
+                <div class="module-head">
+                  <div>
+                    <p class="eyebrow">Google Calendar</p>
+                    <h2>Import Repeating Events</h2>
+                    <p class="module-subtitle">
+                      Connect Google, choose a calendar, then import repeating timed events into fixed commitments.
+                    </p>
+                  </div>
+                </div>
+                <div id="googleConnectionStatus" class="integration-status muted-state">
+                  Google Calendar is not connected for this student profile yet.
+                </div>
+                <div class="toolbar">
+                  <button id="connectGoogleCalendar" class="secondary">Connect Google</button>
+                  <button id="refreshGoogleStatus" class="secondary">Refresh Status</button>
+                  <button id="disconnectGoogleCalendar" class="secondary">Disconnect</button>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Calendar
+                    <select id="googleCalendarSelect">
+                      <option value="primary">Primary Calendar</option>
+                    </select>
+                  </label>
+                  <label>
+                    Lookahead Days
+                    <input id="googleLookaheadDays" type="number" min="7" max="90" value="28" />
+                  </label>
+                </div>
+                <div class="toolbar">
+                  <button id="importGoogleCommitments" class="secondary">Import To Commitments</button>
+                </div>
+                <div id="googleImportSummary" class="list"></div>
               </section>
             </aside>
           </section>
@@ -270,6 +458,140 @@
 
           <section id="taskStats" class="task-stat-grid"></section>
 
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Canvas</p>
+                  <h2>Import Course Assignments</h2>
+                  <p class="module-subtitle">
+                    Connect Canvas with a personal access token, choose a course, then import due assignments into tasks.
+                  </p>
+                </div>
+              </div>
+              <div id="canvasConnectionStatus" class="integration-status neutral">
+                Canvas is not connected for this student profile yet.
+              </div>
+              <div class="form-grid">
+                <label>
+                  Canvas Base URL
+                  <input id="canvasBaseUrl" placeholder="https://your-school.instructure.com" />
+                </label>
+                <label>
+                  Personal Access Token
+                  <input id="canvasAccessToken" type="password" placeholder="Paste Canvas token" />
+                </label>
+              </div>
+              <div class="toolbar">
+                <button id="connectCanvas" class="secondary">Connect Canvas</button>
+                <button id="refreshCanvasStatus" class="secondary">Refresh Status</button>
+                <button id="disconnectCanvas" class="secondary">Disconnect</button>
+              </div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Assignments</p>
+                  <h2>Import Into Tasks</h2>
+                  <p class="module-subtitle">Assignments with due dates become academic tasks that the planner can schedule.</p>
+                </div>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Course
+                  <select id="canvasCourseSelect">
+                    <option value="">Connect Canvas first</option>
+                  </select>
+                </label>
+                <label>
+                  Default Effort (minutes)
+                  <input id="canvasDefaultMinutes" type="number" min="15" max="720" value="90" />
+                </label>
+              </div>
+              <div class="toolbar">
+                <button id="importCanvasAssignments" class="secondary">Import Assignments</button>
+              </div>
+              <div id="canvasImportSummary" class="list"></div>
+            </section>
+          </section>
+
+          <section class="page-grid two-column-layout">
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Manual Input</p>
+                  <h2>Add Or Edit A Task</h2>
+                  <p class="module-subtitle">Keep beta users unblocked even when Canvas import is incomplete.</p>
+                </div>
+              </div>
+              <input id="editingTaskId" type="hidden" value="" />
+              <div class="form-grid">
+                <label>
+                  Title
+                  <input id="taskTitle" placeholder="Finish algorithms problem set" />
+                </label>
+                <label>
+                  Category
+                  <select id="taskCategory">
+                    <option value="academics">Academics</option>
+                    <option value="recruiting">Recruiting</option>
+                    <option value="personal">Personal</option>
+                    <option value="health">Health</option>
+                  </select>
+                </label>
+                <label class="form-span-2">
+                  Description
+                  <textarea id="taskDescription" rows="3" placeholder="What matters most about this task?"></textarea>
+                </label>
+                <label>
+                  Deadline
+                  <input id="taskDeadline" type="date" />
+                </label>
+                <label>
+                  Estimated Minutes
+                  <input id="taskMinutes" type="number" min="15" max="720" value="90" />
+                </label>
+                <label>
+                  Difficulty
+                  <input id="taskDifficulty" type="number" min="1" max="5" value="3" />
+                </label>
+                <label>
+                  Priority
+                  <input id="taskPriority" type="number" min="1" max="5" value="3" />
+                </label>
+                <label>
+                  Status
+                  <select id="taskStatus">
+                    <option value="pending">Pending</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="completed">Completed</option>
+                    <option value="delayed">Delayed</option>
+                  </select>
+                </label>
+              </div>
+              <div class="toolbar">
+                <button id="saveTask">Save Task</button>
+                <button id="resetTaskForm" class="secondary">Clear Form</button>
+              </div>
+            </section>
+
+            <section class="module-card">
+              <div class="module-head">
+                <div>
+                  <p class="eyebrow">Beta Readiness</p>
+                  <h2>What This Unlocks</h2>
+                  <p class="module-subtitle">Manual task input makes the private beta usable even before every user connects external tools.</p>
+                </div>
+              </div>
+              <div class="list compact-list">
+                <div class="item">Students can start with deadlines and effort estimates on day one.</div>
+                <div class="item">You can pilot bounded replanning even when Canvas access is missing.</div>
+                <div class="item">The deployable story stays focused on student workflow, not integration setup.</div>
+              </div>
+            </section>
+          </section>
+
           <section class="module-card">
             <div class="module-head">
               <div>
@@ -285,15 +607,15 @@
           <header class="page-banner simple-banner">
             <div>
               <p class="eyebrow">Repair Lab</p>
-              <h1>Handle disruptions on a dedicated page.</h1>
+              <h1>Recover the week when reality changes.</h1>
               <p class="page-subtitle">
-                Delay a task, compare a chosen strategy against RL repair, and keep the experiment separate from planning.
+                Start from the slipped task, pick the kind of recovery you want, then compare your choice against the learned repair policy.
               </p>
             </div>
             <section class="module-card banner-card compact-banner">
-              <p class="eyebrow">Why separate it?</p>
-              <h2>Cleaner demo story</h2>
-              <p class="module-subtitle">Planning builds the week. Repair Lab explains what happens when the week breaks.</p>
+              <p class="eyebrow">Goal</p>
+              <h2>Make the plan less fragile</h2>
+              <p class="module-subtitle">Use this page to rescue the week without throwing away every good block you already had.</p>
             </section>
           </header>
 
@@ -301,21 +623,61 @@
             <section class="module-card repair-controls-card">
               <div class="module-head">
                 <div>
-                  <p class="eyebrow">Run Repair</p>
-                  <h2>Repair Controls</h2>
-                  <p class="module-subtitle">Choose the delayed task, optional strategy, and training setup.</p>
+                  <p class="eyebrow">Scenario</p>
+                  <h2>What just slipped?</h2>
+                  <p class="module-subtitle">Describe the disruption first, then decide how aggressive the repair should be.</p>
                 </div>
               </div>
 
-              <div class="repair-grid">
+              <div id="repairTaskContext" class="integration-status neutral">
+                Choose an active task to explain what went wrong and how the week should recover.
+              </div>
+
+              <div class="repair-grid repair-grid-two">
                 <label>
                   Delayed Task
                   <select id="repairTask"></select>
                 </label>
                 <label>
-                  Repair Strategy
-                  <select id="repairStrategy"></select>
+                  Week Start
+                  <input id="repairWeekStart" type="date" />
                 </label>
+                <label class="wide-field">
+                  Delay Reason
+                  <input id="repairReason" value="Missed the planned deep-work block." />
+                </label>
+              </div>
+
+              <div class="reason-chip-row">
+                <button type="button" class="secondary compact-button" data-reason-preset="Missed the planned deep-work block.">Missed study block</button>
+                <button type="button" class="secondary compact-button" data-reason-preset="An urgent deadline or interview prep took over the day.">Urgent deadline</button>
+                <button type="button" class="secondary compact-button" data-reason-preset="Energy crashed and I need a lighter recovery plan.">Energy crash</button>
+                <button type="button" class="secondary compact-button" data-reason-preset="The day is overloaded and needs rebalancing.">Overloaded day</button>
+              </div>
+
+              <div class="module-head compact-head">
+                <div>
+                  <p class="eyebrow">Repair Goal</p>
+                  <h2>How should the week recover?</h2>
+                  <p class="module-subtitle">Choose the planning instinct you want to apply before you compare it to RL.</p>
+                </div>
+              </div>
+
+              <select id="repairStrategy" hidden></select>
+              <div id="repairStrategyCards" class="repair-strategy-grid"></div>
+
+              <div class="repair-grid repair-grid-two">
+                <label>
+                  Planner Engine
+                  <select id="repairEngineSelect"></select>
+                </label>
+              </div>
+
+              <div id="repairPreview" class="integration-status neutral">
+                Pick a recovery style to see what tradeoff it makes.
+              </div>
+
+              <div class="repair-grid repair-grid-two">
                 <label>
                   Training Episodes
                   <input id="trainEpisodes" type="number" value="60" min="20" max="300" />
@@ -324,16 +686,12 @@
                   Seed
                   <input id="trainSeed" type="number" value="11" min="0" />
                 </label>
-                <label class="wide-field">
-                  Delay Reason
-                  <input id="repairReason" value="Missed the planned deep-work block." />
-                </label>
               </div>
 
               <div class="toolbar">
-                <button id="replanStrategy">Replan With Strategy</button>
-                <button id="replanRL" class="secondary">Replan With RL</button>
-                <button id="trainSelector" class="secondary">Train Selector</button>
+                <button id="replanStrategy">Run Chosen Repair</button>
+                <button id="replanRL" class="secondary">Let Study Partner Choose</button>
+                <button id="trainSelector" class="secondary">Refresh Learned Policy</button>
               </div>
             </section>
 
@@ -341,7 +699,7 @@
               <div class="module-head">
                 <div>
                   <p class="eyebrow">Result</p>
-                  <h2>Repair Summary</h2>
+                  <h2>What Changed</h2>
                 </div>
               </div>
               <div id="repairSummary" class="list compact-list"></div>

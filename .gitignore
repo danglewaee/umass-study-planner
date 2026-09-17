@@ -2,3 +2,8 @@
 *.pyc
 .venv/
 .env
+*.log
+*.err
+balanceos/
+.pip-cache/
+backend/data/
